@@ -1,0 +1,6 @@
+{
+  "name": "UAE & Dubai Visa AI Hub",
+  "description": "AI-powered UAE & Dubai visa document auditor, passport OCR analyzer, photo validator, eligibility calculator, and agency management platform.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
