@@ -1,6 +1,8 @@
 {
   "name": "UAE & Dubai Visa AI Hub",
   "short_name": "UAE Visa AI",
+  "id": "/",
+  "scope": "/",
   "description": "AI-powered UAE & Dubai visa document auditor, passport OCR analyzer, photo validator, eligibility calculator, and agency management platform.",
   "start_url": "/",
   "display": "standalone",

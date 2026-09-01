@@ -24,7 +24,7 @@ import confetti from 'canvas-confetti';
 interface QuickStartModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onNavigateTab: (tab: 'passport-scanner' | 'photo-auditor' | 'golden-visa' | 'agency-crm' | 'tracking-portal') => void;
+  onNavigateTab: (tab: 'passport-scanner' | 'photo-auditor' | 'golden-visa' | 'agency-crm' | 'tracking-portal' | 'b2b-outreach') => void;
 }
 
 export const QuickStartModal: React.FC<QuickStartModalProps> = ({
@@ -59,7 +59,7 @@ export const QuickStartModal: React.FC<QuickStartModalProps> = ({
     onClose();
   };
 
-  const handleFinish = (targetTab?: 'passport-scanner' | 'agency-crm') => {
+  const handleFinish = (targetTab?: 'passport-scanner' | 'agency-crm' | 'b2b-outreach') => {
     localStorage.setItem('uae_visa_ai_onboarding_completed', 'true');
     confetti({ particleCount: 60, spread: 70, origin: { y: 0.6 } });
     onClose();
@@ -289,36 +289,52 @@ export const QuickStartModal: React.FC<QuickStartModalProps> = ({
       iconBg: 'from-amber-400 to-amber-600',
       content: (
         <div className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <button
               onClick={() => handleFinish('passport-scanner')}
-              className="p-4 rounded-xl bg-gradient-to-br from-amber-500/20 via-slate-900 to-slate-950 border border-amber-500/40 hover:border-amber-400 text-left transition-all group cursor-pointer"
+              className="p-3.5 rounded-xl bg-gradient-to-br from-amber-500/20 via-slate-900 to-slate-950 border border-amber-500/40 hover:border-amber-400 text-left transition-all group cursor-pointer"
             >
-              <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 mb-2.5 group-hover:scale-105 transition-transform">
-                <Scan className="w-5 h-5" />
+              <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 mb-2 group-hover:scale-105 transition-transform">
+                <Scan className="w-4 h-4" />
               </div>
-              <h4 className="font-bold text-sm text-white group-hover:text-amber-300 transition-colors flex items-center justify-between">
-                <span>Start Passport OCR</span>
-                <ArrowRight className="w-4 h-4 text-amber-400 group-hover:translate-x-1 transition-transform" />
+              <h4 className="font-bold text-xs text-white group-hover:text-amber-300 transition-colors flex items-center justify-between">
+                <span>Passport OCR</span>
+                <ArrowRight className="w-3.5 h-3.5 text-amber-400 group-hover:translate-x-1 transition-transform" />
               </h4>
-              <p className="text-[11px] text-slate-400 mt-1">
-                Upload or test sample passports with instant 6-month validity audit.
+              <p className="text-[10px] text-slate-400 mt-1">
+                Batch passport audit & 6-month check.
               </p>
             </button>
 
             <button
               onClick={() => handleFinish('agency-crm')}
-              className="p-4 rounded-xl bg-gradient-to-br from-sky-500/20 via-slate-900 to-slate-950 border border-sky-500/40 hover:border-sky-400 text-left transition-all group cursor-pointer"
+              className="p-3.5 rounded-xl bg-gradient-to-br from-sky-500/20 via-slate-900 to-slate-950 border border-sky-500/40 hover:border-sky-400 text-left transition-all group cursor-pointer"
             >
-              <div className="w-10 h-10 rounded-xl bg-sky-500/10 border border-sky-500/30 flex items-center justify-center text-sky-400 mb-2.5 group-hover:scale-105 transition-transform">
-                <Building2 className="w-5 h-5" />
+              <div className="w-8 h-8 rounded-lg bg-sky-500/10 border border-sky-500/30 flex items-center justify-center text-sky-400 mb-2 group-hover:scale-105 transition-transform">
+                <Building2 className="w-4 h-4" />
               </div>
-              <h4 className="font-bold text-sm text-white group-hover:text-sky-300 transition-colors flex items-center justify-between">
-                <span>Open Agency CRM</span>
-                <ArrowRight className="w-4 h-4 text-sky-400 group-hover:translate-x-1 transition-transform" />
+              <h4 className="font-bold text-xs text-white group-hover:text-sky-300 transition-colors flex items-center justify-between">
+                <span>Agency CRM</span>
+                <ArrowRight className="w-3.5 h-3.5 text-sky-400 group-hover:translate-x-1 transition-transform" />
               </h4>
-              <p className="text-[11px] text-slate-400 mt-1">
-                View client pipeline, peak demand forecast, and automated templates.
+              <p className="text-[10px] text-slate-400 mt-1">
+                Client pipeline & automated templates.
+              </p>
+            </button>
+
+            <button
+              onClick={() => handleFinish('b2b-outreach')}
+              className="p-3.5 rounded-xl bg-gradient-to-br from-emerald-500/20 via-slate-900 to-slate-950 border border-emerald-500/40 hover:border-emerald-400 text-left transition-all group cursor-pointer"
+            >
+              <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 mb-2 group-hover:scale-105 transition-transform">
+                <Zap className="w-4 h-4" />
+              </div>
+              <h4 className="font-bold text-xs text-white group-hover:text-emerald-300 transition-colors flex items-center justify-between">
+                <span>B2B SaaS Outreach</span>
+                <ArrowRight className="w-3.5 h-3.5 text-emerald-400 group-hover:translate-x-1 transition-transform" />
+              </h4>
+              <p className="text-[10px] text-slate-400 mt-1">
+                Bulk Gmail pitches to Typing Centers & Agencies.
               </p>
             </button>
           </div>

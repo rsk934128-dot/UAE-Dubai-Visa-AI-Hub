@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { PhotoAuditResult, LivenessCheckResult } from '../types';
 import { DUMMY_PHOTO_SAMPLES, convertFileToBase64, ensureRasterBase64 } from '../lib/utils';
+import { useLanguage } from '../context/LanguageContext';
 import { LivenessVerificationSection } from './LivenessVerificationSection';
 
 interface PhotoSpecificationAuditorProps {
@@ -22,6 +23,7 @@ interface PhotoSpecificationAuditorProps {
 }
 
 export const PhotoSpecificationAuditor: React.FC<PhotoSpecificationAuditorProps> = ({ onPhotoAudited }) => {
+  const { language } = useLanguage();
   const [activeSubTab, setActiveSubTab] = useState<'photo-spec' | 'liveness'>('photo-spec');
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
@@ -85,7 +87,7 @@ export const PhotoSpecificationAuditor: React.FC<PhotoSpecificationAuditorProps>
           }`}
         >
           <Camera className="w-4 h-4" />
-          ১. Photo Background &amp; Spec Auditor (40x55mm)
+          {language === 'ar' ? '١. مطابقة الصورة البيومترية والخلفية (40x55mm)' : '1. Photo Background & Spec Auditor (40x55mm)'}
         </button>
 
         <button
@@ -98,7 +100,7 @@ export const PhotoSpecificationAuditor: React.FC<PhotoSpecificationAuditorProps>
           }`}
         >
           <ShieldCheck className="w-4 h-4" />
-          ২. Real-Time Selfie Liveness &amp; Biometric Match Check
+          {language === 'ar' ? '٢. التحقق الحيوي المباشر ومطابقة الوجه' : '2. Real-Time Selfie Liveness & Biometric Match Check'}
           <span className="ml-1 px-1.5 py-0.5 rounded text-[9px] font-mono bg-emerald-950 text-emerald-300 border border-emerald-800/80">
             Live AI
           </span>
@@ -114,13 +116,15 @@ export const PhotoSpecificationAuditor: React.FC<PhotoSpecificationAuditorProps>
               <div>
                 <div className="flex items-center gap-2 text-sky-400 font-semibold tracking-wide text-xs uppercase mb-1">
                   <Camera className="w-4 h-4" />
-                  ICA &amp; GDRFA Dubai Biometric Photo Specification Standard
+                  {language === 'ar' ? 'المعايير المعتمدة للهيئة الاتحادية وإقامة دبي' : 'ICA & GDRFA Dubai Biometric Photo Specification Standard'}
                 </div>
                 <h2 className="text-xl font-bold text-white tracking-tight">
-                  AI Visa Photo Quality &amp; Background Auditor (40x55mm / 80% Face)
+                  {language === 'ar' ? 'فحص جودة الصورة البيومترية والخلفية البيضاء (40x55mm)' : 'AI Visa Photo Quality & Background Auditor (40x55mm / 80% Face)'}
                 </h2>
                 <p className="text-slate-400 text-sm mt-1 max-w-2xl">
-                  Strict UAE immigration rules require pure white background, 80% face visibility, open eyes, and zero shadows. Instant AI diagnostic catches rejections before submission.
+                  {language === 'ar'
+                    ? 'تشترط قوانين دولة الإمارات خلفية بيضاء نقية، ووضوح الوجه بنسبة 80%، وانعدام الظلال والنظارات العاكسة. يقوم الذكاء الاصطناعي بكشف أي مخالفات قبل إرسال الطلب.'
+                    : 'Strict UAE immigration rules require pure white background, 80% face visibility, open eyes, and zero shadows. Instant AI diagnostic catches rejections before submission.'}
                 </p>
               </div>
 
@@ -135,7 +139,7 @@ export const PhotoSpecificationAuditor: React.FC<PhotoSpecificationAuditorProps>
                   className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
                 >
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                  Test Compliant Photo
+                  {language === 'ar' ? 'صورة مطابقة (تجربة)' : 'Test Compliant Photo'}
                 </button>
                 <button
                   id="test-noncompliant-photo-btn"
@@ -147,7 +151,7 @@ export const PhotoSpecificationAuditor: React.FC<PhotoSpecificationAuditorProps>
                   className="text-xs bg-red-950/40 hover:bg-red-900/50 text-red-300 border border-red-800/60 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
                 >
                   <AlertTriangle className="w-3.5 h-3.5 text-red-400" />
-                  Test Non-Compliant
+                  {language === 'ar' ? 'صورة غير مطابقة' : 'Test Non-Compliant'}
                 </button>
               </div>
             </div>

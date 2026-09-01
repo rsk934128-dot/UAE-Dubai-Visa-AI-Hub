@@ -1,1 +1,7 @@
 @import "tailwindcss";
+
+@layer base {
+  body.font-arabic, [dir="rtl"] {
+    font-family: 'Cairo', 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  }
+}

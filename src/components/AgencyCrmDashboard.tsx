@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Building, 
   Users, 
@@ -24,20 +24,30 @@ import {
   Calculator,
   Coins,
   X,
-  TrendingUp
+  TrendingUp,
+  History,
+  Layers,
+  ChevronRight,
+  QrCode
 } from 'lucide-react';
-import { VisaApplication, PassportAuditResult } from '../types';
+import { VisaApplication, PassportAuditResult, DocumentAuditHistoryItem, ApplicationAuditEvent } from '../types';
 import { formatDate } from '../lib/utils';
-import { PassportAuditAnalyticsWidget } from './PassportAuditAnalyticsWidget';
+import { useLanguage } from '../context/LanguageContext';
+import { PassportAuditStatisticsDashboard } from './PassportAuditStatisticsDashboard';
 import { VisaDemandForecastWidget } from './VisaDemandForecastWidget';
 import { VisaFeeCalculatorModal } from './VisaFeeCalculatorModal';
 import { TemplateManagerModal } from './TemplateManagerModal';
+import { DocumentHistoryModal } from './DocumentHistoryModal';
+import { AgencyAuditTrailView } from './AgencyAuditTrailView';
+import { ApplicationQrCodeModal } from './ApplicationQrCodeModal';
 
 interface AgencyCrmDashboardProps {
   applications: VisaApplication[];
   onAddApplication: (app: VisaApplication) => void;
   onUpdateStatus: (id: string, newStatus: VisaApplication['status'], notes?: string) => void;
   onSendEmailUpdate: (app: VisaApplication, customSubject?: string, customBody?: string) => void;
+  onUpdateApplicationDocuments?: (id: string, updatedDocs: DocumentAuditHistoryItem[]) => void;
+  onAddAuditEvent?: (appId: string, event: Partial<ApplicationAuditEvent>) => void;
   userEmail?: string;
   isSendingEmail?: boolean;
   prefillApplication?: Partial<VisaApplication> | null;
@@ -49,19 +59,65 @@ export const AgencyCrmDashboard: React.FC<AgencyCrmDashboardProps> = ({
   onAddApplication,
   onUpdateStatus,
   onSendEmailUpdate,
+  onUpdateApplicationDocuments,
+  onAddAuditEvent,
   userEmail,
   isSendingEmail,
   prefillApplication,
   onClearPrefill
 }) => {
+  const { language } = useLanguage();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [selectedApp, setSelectedApp] = useState<VisaApplication | null>(null);
+  const [selectedDocHistoryApp, setSelectedDocHistoryApp] = useState<VisaApplication | null>(null);
+  const [selectedQrApp, setSelectedQrApp] = useState<VisaApplication | null>(null);
   const [showNewModal, setShowNewModal] = useState(false);
+
+  // Check URL query parameters for direct mobile QR scan links (e.g. ?appId=...&action=documents)
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined' && window.location.search) {
+        const params = new URLSearchParams(window.location.search);
+        const targetAppId = params.get('appId');
+        const targetAction = params.get('action');
+        if (targetAppId && applications.length > 0) {
+          const matched = applications.find(
+            (a) => a.id.toLowerCase() === targetAppId.toLowerCase() ||
+                   a.passportNumber.toLowerCase() === targetAppId.toLowerCase()
+          );
+          if (matched) {
+            if (targetAction === 'documents') {
+              setSelectedDocHistoryApp(matched);
+            } else if (targetAction === 'dossier') {
+              setSelectedApp(matched);
+              setInspectModalTab('overview');
+            } else if (targetAction === 'qr') {
+              setSelectedQrApp(matched);
+            } else {
+              setSelectedApp(matched);
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Could not parse initial QR scan query parameters:', e);
+    }
+  }, [applications]);
   const [showFeeCalculator, setShowFeeCalculator] = useState(false);
   const [calculatorVisaType, setCalculatorVisaType] = useState<string>('30-Day Single Entry Tourist Visa');
   const [calculatorNationality, setCalculatorNationality] = useState<string>('Bangladeshi');
   const [analyticsTab, setAnalyticsTab] = useState<'demand-forecast' | 'audit-metrics'>('demand-forecast');
+  
+  // CRM Dashboard View Tab state
+  const [crmViewTab, setCrmViewTab] = useState<'dossiers' | 'audit-trail' | 'analytics'>('dossiers');
+  const [auditTrailTargetAppId, setAuditTrailTargetAppId] = useState<string | undefined>(undefined);
+  const [inspectModalTab, setInspectModalTab] = useState<'overview' | 'audit-trail'>('overview');
+
+  // Total audit trail events across applications
+  const totalAuditEventsCount = useMemo(() => {
+    return applications.reduce((sum, a) => sum + (a.auditTrail?.length || 0), 0);
+  }, [applications]);
   
   // Template Manager state
   const [showTemplateManager, setShowTemplateManager] = useState(false);
@@ -165,6 +221,27 @@ export const AgencyCrmDashboard: React.FC<AgencyCrmDashboardProps> = ({
       ? `Passport OCR Verified (Score: ${attachedAudit.overallScore}/100). Expiry: ${attachedAudit.extractedData.expiryDate}. 6-Month Rule: ${attachedAudit.validationChecks.hasSixMonthsValidity ? 'Passed' : 'Flagged'}.`
       : 'New agency client intake. Awaiting passport page and photo upload.';
 
+    const initialDocs: DocumentAuditHistoryItem[] = attachedAudit ? [{
+      id: `doc-${Date.now()}-passport`,
+      version: 'v1.0',
+      documentType: 'Passport OCR',
+      fileName: `${newName.toLowerCase().replace(/\s+/g, '_')}_passport.png`,
+      uploadedAt: new Date().toISOString(),
+      uploadedBy: 'Desk Officer 01 (Dubai Hub)',
+      status: attachedAudit.isValid ? 'Passed' : 'Flagged',
+      score: attachedAudit.overallScore,
+      summary: `Initial intake passport OCR. Expiry: ${attachedAudit.extractedData.expiryDate || 'N/A'}. 6-Month Rule: ${attachedAudit.validationChecks.hasSixMonthsValidity ? 'Passed' : 'Flagged'}.`,
+      details: {
+        validityDaysRemaining: attachedAudit.validationChecks.validityRemainingDays,
+        expiryDate: attachedAudit.extractedData.expiryDate,
+        mrzStatus: attachedAudit.validationChecks.mrzMatched ? 'Matched' : 'Discrepancy',
+        sixMonthRuleMet: attachedAudit.validationChecks.hasSixMonthsValidity,
+        fileSize: '1.8 MB'
+      },
+      notes: attachedAudit.dubaiVisaEligibilityNotes,
+      passportAudit: attachedAudit
+    }] : [];
+
     const newApp: VisaApplication = {
       id: `DXB-2026-${Math.floor(1000 + Math.random() * 9000)}`,
       createdAt: new Date().toISOString(),
@@ -179,6 +256,7 @@ export const AgencyCrmDashboard: React.FC<AgencyCrmDashboardProps> = ({
       urgency: newUrgency,
       assignedAgent: 'Desk Officer 01 (Dubai Hub)',
       passportAudit: attachedAudit || undefined,
+      documentHistory: initialDocs,
       notes: newNotes.trim() || defaultNotes,
       feePaid: false
     };
@@ -227,41 +305,152 @@ export const AgencyCrmDashboard: React.FC<AgencyCrmDashboardProps> = ({
         </div>
       </div>
 
-      {/* Analytics & Forecast Switcher Tab */}
-      <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
-        <button
-          id="crm-demand-forecast-tab-btn"
-          onClick={() => setAnalyticsTab('demand-forecast')}
-          className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-            analyticsTab === 'demand-forecast'
-              ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-850 bg-slate-900/60'
-          }`}
-        >
-          <TrendingUp className="w-3.5 h-3.5" />
-          📈 3-Month Peak Visa Demand Forecast (Recharts)
-        </button>
+      {/* CRM Primary Navigation Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            id="crm-tab-dossiers"
+            onClick={() => setCrmViewTab('dossiers')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              crmViewTab === 'dossiers'
+                ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
+                : 'text-slate-300 hover:text-white bg-slate-900/80 hover:bg-slate-800 border border-slate-800'
+            }`}
+          >
+            <Building className="w-4 h-4" />
+            <span>{language === 'ar' ? 'ملفات الوكالة والطلبات' : 'Application Dossiers'}</span>
+            <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-slate-950/60 text-slate-200 border border-slate-700/60 font-bold">
+              {applications.length}
+            </span>
+          </button>
 
-        <button
-          id="crm-audit-metrics-tab-btn"
-          onClick={() => setAnalyticsTab('audit-metrics')}
-          className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-            analyticsTab === 'audit-metrics'
-              ? 'bg-sky-500 text-slate-950 shadow-md shadow-sky-500/20'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-850 bg-slate-900/60'
-          }`}
-        >
-          <FileCheck className="w-3.5 h-3.5" />
-          📊 30-Day Passport Audit Clearance Metrics
-        </button>
+          <button
+            id="crm-tab-audit-trail"
+            onClick={() => {
+              setAuditTrailTargetAppId(undefined);
+              setCrmViewTab('audit-trail');
+            }}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              crmViewTab === 'audit-trail'
+                ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
+                : 'text-slate-300 hover:text-white bg-slate-900/80 hover:bg-slate-800 border border-slate-800'
+            }`}
+          >
+            <History className="w-4 h-4" />
+            <span>{language === 'ar' ? 'سجل التدقيق والتتبع' : 'Audit Trail'}</span>
+            <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-slate-950/60 text-amber-300 border border-amber-500/30 font-bold">
+              {totalAuditEventsCount || 8}
+            </span>
+          </button>
+
+          <button
+            id="crm-tab-analytics"
+            onClick={() => setCrmViewTab('analytics')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              crmViewTab === 'analytics'
+                ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
+                : 'text-slate-300 hover:text-white bg-slate-900/80 hover:bg-slate-800 border border-slate-800'
+            }`}
+          >
+            <TrendingUp className="w-4 h-4" />
+            <span>{language === 'ar' ? 'التحليلات والتوقعات' : 'Demand & Audit Analytics'}</span>
+          </button>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            id="btn-open-template-manager-header"
+            type="button"
+            onClick={() => handleOpenTemplateManager()}
+            className="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-sky-300 text-xs font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1.5 cursor-pointer shadow-sm transition-colors"
+            title="Manage frequently used email messages and templates"
+          >
+            <FileText className="w-3.5 h-3.5 text-sky-400" />
+            <span>Templates</span>
+          </button>
+
+          <button
+            id="btn-open-fee-calculator-header"
+            type="button"
+            onClick={() => handleOpenFeeCalculator()}
+            className="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-amber-300 text-xs font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1.5 cursor-pointer shadow-sm transition-colors"
+          >
+            <Calculator className="w-3.5 h-3.5 text-amber-400" />
+            <span>Fee Calculator</span>
+          </button>
+
+          <button
+            onClick={() => setShowNewModal(true)}
+            className="bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 cursor-pointer shadow-md transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            <span>New Intake</span>
+          </button>
+        </div>
       </div>
 
-      {/* Conditional Analytics View */}
-      {analyticsTab === 'demand-forecast' ? (
-        <VisaDemandForecastWidget applications={applications} />
-      ) : (
-        <PassportAuditAnalyticsWidget applications={applications} />
+      {/* VIEW: AUDIT TRAIL TAB */}
+      {crmViewTab === 'audit-trail' && (
+        <AgencyAuditTrailView
+          applications={applications}
+          selectedApplicationId={auditTrailTargetAppId}
+          onSelectApplicationId={(id) => setAuditTrailTargetAppId(id)}
+          onInspectApplication={(app) => {
+            setSelectedApp(app);
+            setInspectModalTab('overview');
+          }}
+          onSendEmailAlert={(app) => onSendEmailUpdate(app)}
+          onOpenDocHistory={(app) => setSelectedDocHistoryApp(app)}
+          onAddAuditEvent={onAddAuditEvent}
+        />
       )}
+
+      {/* VIEW: ANALYTICS TAB */}
+      {crmViewTab === 'analytics' && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
+            <button
+              id="crm-demand-forecast-tab-btn"
+              onClick={() => setAnalyticsTab('demand-forecast')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                analyticsTab === 'demand-forecast'
+                  ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-850 bg-slate-900/60'
+              }`}
+            >
+              <TrendingUp className="w-3.5 h-3.5" />
+              📈 3-Month Peak Visa Demand Forecast (Recharts)
+            </button>
+
+            <button
+              id="crm-passport-audit-stats-tab-btn"
+              onClick={() => setAnalyticsTab('audit-metrics')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                analyticsTab === 'audit-metrics'
+                  ? 'bg-sky-500 text-slate-950 shadow-md shadow-sky-500/20'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-850 bg-slate-900/60'
+              }`}
+            >
+              <FileCheck className="w-3.5 h-3.5" />
+              {language === 'ar' ? '📊 إحصائيات تدقيق جوازات السفر (Recharts)' : '📊 Passport Audit Statistics (Recharts)'}
+            </button>
+            <span id="crm-audit-metrics-tab-btn" className="hidden" onClick={() => setAnalyticsTab('audit-metrics')} />
+          </div>
+
+          {analyticsTab === 'demand-forecast' ? (
+            <VisaDemandForecastWidget applications={applications} />
+          ) : (
+            <PassportAuditStatisticsDashboard
+              applications={applications}
+              onSelectApplication={(app) => setSelectedApp(app)}
+            />
+          )}
+        </div>
+      )}
+
+      {/* VIEW: DOSSIERS TAB */}
+      {crmViewTab === 'dossiers' && (
+        <div className="space-y-4">
 
       {/* Control Bar: Search, Filters, New Intake */}
       <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-4 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
@@ -472,6 +661,20 @@ export const AgencyCrmDashboard: React.FC<AgencyCrmDashboardProps> = ({
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-1.5">
                       <button
+                        onClick={() => setSelectedDocHistoryApp(app)}
+                        title={`View document versions & audit history for ${app.applicantName}`}
+                        className="text-xs bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700/80 px-2.5 py-1 rounded transition-colors cursor-pointer flex items-center gap-1.5 font-medium"
+                      >
+                        <History className="w-3.5 h-3.5 text-amber-400" />
+                        <span>{language === 'ar' ? 'سجل الوثائق' : 'Doc History'}</span>
+                        <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30">
+                          {app.documentHistory && app.documentHistory.length > 0
+                            ? app.documentHistory.length
+                            : (app.passportAudit ? 1 : 0)}
+                        </span>
+                      </button>
+
+                      <button
                         onClick={() => handleOpenTemplateManager(app)}
                         title="Draft or copy message/cover letter from Template Manager"
                         className="text-xs bg-slate-800 hover:bg-slate-700 text-sky-300 border border-slate-700/80 px-2 py-1 rounded transition-colors cursor-pointer flex items-center gap-1"
@@ -490,7 +693,36 @@ export const AgencyCrmDashboard: React.FC<AgencyCrmDashboardProps> = ({
                       </button>
 
                       <button
-                        onClick={() => setSelectedApp(app)}
+                        id={`btn-open-audit-trail-${app.id}`}
+                        onClick={() => {
+                          setAuditTrailTargetAppId(app.id);
+                          setCrmViewTab('audit-trail');
+                        }}
+                        title={`View chronological audit trail for ${app.applicantName}`}
+                        className="text-xs bg-slate-800 hover:bg-slate-700 text-sky-300 border border-slate-700/80 px-2 py-1 rounded transition-colors cursor-pointer flex items-center gap-1 font-medium"
+                      >
+                        <History className="w-3.5 h-3.5 text-sky-400" />
+                        <span>Audit</span>
+                        <span className="text-[10px] font-mono px-1 py-0.2 rounded bg-sky-950 text-sky-300 border border-sky-800 font-bold">
+                          {app.auditTrail?.length || 0}
+                        </span>
+                      </button>
+
+                      <button
+                        id={`btn-open-qr-${app.id}`}
+                        onClick={() => setSelectedQrApp(app)}
+                        title={`Generate scannable QR Code linking to digital documents / status for ${app.applicantName}`}
+                        className="text-xs bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 px-2 py-1 rounded transition-colors cursor-pointer flex items-center gap-1 font-semibold"
+                      >
+                        <QrCode className="w-3.5 h-3.5 text-amber-400" />
+                        <span>QR</span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setSelectedApp(app);
+                          setInspectModalTab('overview');
+                        }}
                         className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 px-2.5 py-1 rounded transition-colors cursor-pointer"
                       >
                         Inspect
@@ -514,6 +746,8 @@ export const AgencyCrmDashboard: React.FC<AgencyCrmDashboardProps> = ({
           </table>
         </div>
       </div>
+    </div>
+    )}
 
       {/* Modal / Flyout for Application Details */}
       {selectedApp && (
@@ -531,6 +765,44 @@ export const AgencyCrmDashboard: React.FC<AgencyCrmDashboardProps> = ({
                 ✕
               </button>
             </div>
+
+            {/* Modal Internal Navigation Tabs */}
+            <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
+              <button
+                type="button"
+                id="modal-tab-overview"
+                onClick={() => setInspectModalTab('overview')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  inspectModalTab === 'overview'
+                    ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
+                    : 'text-slate-400 hover:text-white bg-slate-950 border border-slate-800'
+                }`}
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>Dossier Overview</span>
+              </button>
+
+              <button
+                type="button"
+                id="modal-tab-audit-trail"
+                onClick={() => setInspectModalTab('audit-trail')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  inspectModalTab === 'audit-trail'
+                    ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
+                    : 'text-slate-400 hover:text-white bg-slate-950 border border-slate-800'
+                }`}
+              >
+                <History className="w-3.5 h-3.5" />
+                <span>Audit Trail History</span>
+                <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-slate-900 text-amber-300 font-bold border border-slate-700">
+                  {selectedApp.auditTrail?.length || 0}
+                </span>
+              </button>
+            </div>
+
+            {/* Tab 1: Dossier Overview Content */}
+            {inspectModalTab === 'overview' && (
+              <div className="space-y-4">
 
             <div className="grid grid-cols-2 gap-3 text-xs">
               <div className="bg-slate-950 p-3 rounded-lg border border-slate-800">
@@ -647,6 +919,36 @@ export const AgencyCrmDashboard: React.FC<AgencyCrmDashboardProps> = ({
               </div>
             )}
 
+            {/* Document Versions & Audit Trail Mini-Panel */}
+            <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+                  <History className="w-4 h-4" />
+                </div>
+                <div>
+                  <span className="text-xs font-bold text-white block">
+                    {language === 'ar' ? 'سجل وتاريخ المستندات الممسوحة والمفحوصة' : 'Document Version History & Audit Trail'}
+                  </span>
+                  <span className="text-[11px] text-slate-400">
+                    {selectedApp.documentHistory && selectedApp.documentHistory.length > 0
+                      ? `${selectedApp.documentHistory.length} ${language === 'ar' ? 'نسخ ووثائق مؤرشفة لهذا الطلب' : 'audited document versions on file'}`
+                      : (selectedApp.passportAudit 
+                        ? (language === 'ar' ? 'نسخة جواز السفر الأساسية مسجلة' : '1 primary passport record on file')
+                        : (language === 'ar' ? 'لا توجد مستندات مسجلة بعد' : 'No documents attached yet'))}
+                  </span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setSelectedDocHistoryApp(selectedApp)}
+                className="text-xs bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 px-3 py-1.5 rounded-lg flex items-center gap-1.5 cursor-pointer font-semibold transition-colors shrink-0"
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span>{language === 'ar' ? 'استعراض السجل والمقارنة' : 'Open Document History'}</span>
+              </button>
+            </div>
+
             {/* Remarks / Notes */}
             <div className="space-y-1">
               <label className="text-xs font-semibold text-slate-300">Audit &amp; Processing Remarks:</label>
@@ -678,6 +980,18 @@ export const AgencyCrmDashboard: React.FC<AgencyCrmDashboardProps> = ({
                   <FileText className="w-3.5 h-3.5 text-sky-400" />
                   <span>Templates &amp; Drafts</span>
                 </button>
+
+                <button
+                  type="button"
+                  id="btn-modal-open-qr"
+                  onClick={() => {
+                    setSelectedQrApp(selectedApp);
+                  }}
+                  className="text-xs bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 px-3 py-2 rounded-lg flex items-center gap-1.5 cursor-pointer transition-colors font-semibold"
+                >
+                  <QrCode className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Mobile QR Code</span>
+                </button>
               </div>
 
               <button
@@ -692,8 +1006,134 @@ export const AgencyCrmDashboard: React.FC<AgencyCrmDashboardProps> = ({
               </button>
             </div>
           </div>
+          )}
+
+          {/* Tab 2: Audit Trail Tab Content */}
+          {inspectModalTab === 'audit-trail' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="text-xs text-slate-300">
+                  Chronological audit log for <strong className="text-amber-400 font-mono">{selectedApp.applicantName}</strong> ({selectedApp.id})
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuditTrailTargetAppId(selectedApp.id);
+                    setCrmViewTab('audit-trail');
+                    setSelectedApp(null);
+                  }}
+                  className="text-xs text-sky-400 hover:text-sky-300 underline cursor-pointer flex items-center gap-1"
+                >
+                  <span>Open in Full CRM Audit Trail View</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1">
+                {(!selectedApp.auditTrail || selectedApp.auditTrail.length === 0) ? (
+                  <div className="text-center p-6 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-400">
+                    No logged audit events found for this application yet.
+                  </div>
+                ) : (
+                  selectedApp.auditTrail
+                    .slice()
+                    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+                    .map((evt, idx) => (
+                      <div
+                        key={evt.id || idx}
+                        className="bg-slate-950 border border-slate-800/80 rounded-xl p-3.5 text-xs space-y-2"
+                      >
+                        <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
+                          <span className="font-semibold text-white flex items-center gap-1.5">
+                            {evt.type === 'status_change' && <ArrowUpDown className="w-3.5 h-3.5 text-amber-400" />}
+                            {evt.type === 'email_alert' && <Mail className="w-3.5 h-3.5 text-sky-400" />}
+                            {evt.type === 'document_update' && <FileCheck className="w-3.5 h-3.5 text-purple-400" />}
+                            {evt.type === 'application_created' && <Plus className="w-3.5 h-3.5 text-emerald-400" />}
+                            {evt.type === 'note_added' && <FileText className="w-3.5 h-3.5 text-slate-400" />}
+                            <span>{evt.title}</span>
+                          </span>
+                          <span className="text-[11px] font-mono text-slate-500">
+                            {formatDate(evt.timestamp)}
+                          </span>
+                        </div>
+
+                        {/* Event specifics */}
+                        {evt.type === 'status_change' && (
+                          <div className="flex items-center gap-2 text-[11px]">
+                            <span className="text-slate-500">Transition:</span>
+                            <span className="text-slate-300 font-mono">{evt.details.previousStatus}</span>
+                            <span className="text-amber-400 font-bold">➔</span>
+                            <span className="text-amber-300 font-mono font-bold">{evt.details.newStatus}</span>
+                            {evt.details.reason && (
+                              <span className="text-slate-400 ml-2">({evt.details.reason})</span>
+                            )}
+                          </div>
+                        )}
+
+                        {evt.type === 'email_alert' && (
+                          <div className="space-y-1 text-[11px]">
+                            <div className="text-sky-300 font-mono">
+                              Sent to: {evt.details.recipientEmail} | {evt.details.deliveryStatus || 'Delivered'}
+                            </div>
+                            {evt.details.subject && (
+                              <div className="text-slate-300 font-medium">Subject: {evt.details.subject}</div>
+                            )}
+                            {evt.details.emailBodyPreview && (
+                              <div className="text-slate-400 italic bg-slate-900/60 p-2 rounded border border-slate-800">
+                                "{evt.details.emailBodyPreview}"
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {evt.type === 'document_update' && (
+                          <div className="space-y-1 text-[11px]">
+                            <div className="text-purple-300 font-semibold font-mono">
+                              {evt.details.documentType} {evt.details.version && `(${evt.details.version})`}
+                              {evt.details.score !== undefined && ` - Score: ${evt.details.score}/100`}
+                            </div>
+                            {evt.details.fileName && (
+                              <div className="text-slate-400 font-mono">File: {evt.details.fileName}</div>
+                            )}
+                            {evt.details.notes && (
+                              <div className="text-slate-300">{evt.details.notes}</div>
+                            )}
+                          </div>
+                        )}
+
+                        {(evt.type === 'note_added' || evt.type === 'application_created') && evt.details.notes && (
+                          <div className="text-[11px] text-slate-300">{evt.details.notes}</div>
+                        )}
+
+                        <div className="text-[10px] text-slate-500">
+                          Actor: <span className="text-slate-400">{evt.actor}</span>
+                        </div>
+                      </div>
+                    ))
+                )}
+              </div>
+
+              <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
+                <span className="text-xs text-slate-400">
+                  Total recorded events: <strong className="text-slate-200">{selectedApp.auditTrail?.length || 0}</strong>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuditTrailTargetAppId(selectedApp.id);
+                    setCrmViewTab('audit-trail');
+                    setSelectedApp(null);
+                  }}
+                  className="text-xs bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
+                >
+                  Open in Audit Trail Tab
+                </button>
+              </div>
+            </div>
+          )}
         </div>
-      )}
+      </div>
+    )}
 
       {/* Modal: Create New Intake */}
       {showNewModal && (
@@ -898,6 +1338,48 @@ export const AgencyCrmDashboard: React.FC<AgencyCrmDashboardProps> = ({
           onSendEmailUpdate(app, subject, body);
         }}
       />
+
+      {/* Document History & Audit Trail Modal */}
+      {selectedDocHistoryApp && (
+        <DocumentHistoryModal
+          application={selectedDocHistoryApp}
+          isOpen={!!selectedDocHistoryApp}
+          onClose={() => setSelectedDocHistoryApp(null)}
+          onUpdateApplicationDocuments={(id, docs) => {
+            if (onUpdateApplicationDocuments) {
+              onUpdateApplicationDocuments(id, docs);
+            }
+            if (selectedApp && selectedApp.id === id) {
+              setSelectedApp({
+                ...selectedApp,
+                documentHistory: docs
+              });
+            }
+            if (selectedDocHistoryApp && selectedDocHistoryApp.id === id) {
+              setSelectedDocHistoryApp({
+                ...selectedDocHistoryApp,
+                documentHistory: docs
+              });
+            }
+          }}
+        />
+      )}
+
+      {/* Application Mobile QR Code Generator Modal */}
+      {selectedQrApp && (
+        <ApplicationQrCodeModal
+          application={selectedQrApp}
+          isOpen={!!selectedQrApp}
+          onClose={() => setSelectedQrApp(null)}
+          onOpenDocumentFolder={(app) => {
+            setSelectedDocHistoryApp(app);
+          }}
+          onOpenDossier={(app) => {
+            setSelectedApp(app);
+            setInspectModalTab('overview');
+          }}
+        />
+      )}
     </div>
   );
 };

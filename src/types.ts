@@ -36,6 +36,17 @@ export interface SavedPassportAudit {
   fileName?: string;
 }
 
+export interface BatchPassportAuditItem {
+  id: string;
+  fileName: string;
+  fileSize?: number;
+  previewUrl: string;
+  status: 'pending' | 'processing' | 'completed' | 'error';
+  result?: PassportAuditResult;
+  error?: string;
+  processedAt?: string;
+}
+
 export interface LivenessCheckResult {
   isMatch: boolean;
   matchConfidenceScore: number; // 0 - 100
@@ -115,6 +126,85 @@ export interface GoldenVisaCategory {
   stepByStepGuide: string[];
 }
 
+export type DocumentAuditType = 
+  | 'Passport OCR' 
+  | 'Biometric Photo' 
+  | 'Selfie Liveness' 
+  | 'Attested Degree' 
+  | 'Salary Certificate / Bank Statement' 
+  | 'Emirates ID / National ID' 
+  | 'Trade License / Work Contract' 
+  | 'Other Document';
+
+export type DocumentAuditStatus = 'Passed' | 'Flagged' | 'Under Review' | 'Superseded' | 'Approved';
+
+export interface DocumentAuditHistoryItem {
+  id: string;
+  version: string; // e.g. "v1.0", "v1.1", "v2.0"
+  documentType: DocumentAuditType;
+  fileName: string;
+  uploadedAt: string;
+  uploadedBy: string;
+  status: DocumentAuditStatus;
+  score: number; // 0 - 100
+  summary: string;
+  details: {
+    validityDaysRemaining?: number;
+    expiryDate?: string;
+    mrzStatus?: 'Matched' | 'Discrepancy' | 'Missing' | 'N/A';
+    sixMonthRuleMet?: boolean;
+    photoDimensions?: string;
+    faceCoverageRatio?: number;
+    backgroundTone?: string;
+    rejectionReasons?: string[];
+    suggestions?: string[];
+    previewUrl?: string;
+    fileSize?: string;
+    checksumSha256?: string;
+  };
+  notes?: string;
+  passportAudit?: PassportAuditResult;
+  photoAudit?: PhotoAuditResult;
+  livenessResult?: LivenessCheckResult;
+}
+
+export type AuditEventType = 
+  | 'status_change' 
+  | 'email_alert' 
+  | 'document_update' 
+  | 'application_created' 
+  | 'note_added';
+
+export interface ApplicationAuditEvent {
+  id: string;
+  applicationId: string;
+  applicantName: string;
+  passportNumber?: string;
+  timestamp: string; // ISO string
+  type: AuditEventType;
+  title: string;
+  titleBn?: string;
+  actor: string;
+  details: {
+    previousStatus?: string;
+    newStatus?: string;
+    statusColor?: string;
+    recipientEmail?: string;
+    subject?: string;
+    emailBodyPreview?: string;
+    templateUsed?: string;
+    deliveryStatus?: 'Delivered' | 'Sent via Gmail' | 'Queued' | 'Failed';
+    documentType?: string;
+    fileName?: string;
+    version?: string;
+    score?: number;
+    fileSize?: string;
+    checksumSha256?: string;
+    notes?: string;
+    reason?: string;
+  };
+}
+
 export interface VisaApplication {
   id: string;
   createdAt: string;
@@ -130,10 +220,12 @@ export interface VisaApplication {
   assignedAgent: string;
   passportAudit?: PassportAuditResult;
   photoAudit?: PhotoAuditResult;
+  documentHistory?: DocumentAuditHistoryItem[];
   notes: string;
   feePaid: boolean;
   referenceNumber?: string;
   lastEmailSent?: string;
+  auditTrail?: ApplicationAuditEvent[];
 }
 
 export interface TrackingQuery {
@@ -180,4 +272,44 @@ export interface CommunicationTemplate {
   tags?: string[];
   isCustom?: boolean;
   lastModified?: string;
+}
+
+export type B2BPartnerCategory = 
+  | 'typing_center' 
+  | 'travel_agency' 
+  | 'corporate_pro' 
+  | 'manpower_recruitment' 
+  | 'golden_visa' 
+  | 'custom';
+
+export interface B2BPartnerLead {
+  id: string;
+  companyName: string;
+  category: B2BPartnerCategory;
+  contactPerson: string;
+  designation: string;
+  email: string;
+  secondaryEmail?: string;
+  phone?: string;
+  whatsapp?: string;
+  city: string;
+  country: string;
+  estimatedVolume: string;
+  status: 'new' | 'contacted' | 'negotiating' | 'partner_signed' | 'follow_up';
+  lastContactedAt?: string;
+  notes?: string;
+  isCustom?: boolean;
+}
+
+export interface B2BOutreachCampaign {
+  id: string;
+  name: string;
+  templateId: string;
+  subject: string;
+  body: string;
+  recipientsCount: number;
+  recipientEmails: string[];
+  sentAt: string;
+  dispatchMethod: 'gmail_web' | 'gmail_api' | 'mailto' | 'copied';
+  status: 'sent' | 'draft';
 }
