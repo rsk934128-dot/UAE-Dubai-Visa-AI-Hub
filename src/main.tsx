@@ -1,7 +1,11 @@
 import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
+import {injectSpeedInsights} from '@vercel/speed-insights';
 import App from './App.tsx';
 import './index.css';
+
+// Inject Vercel Speed Insights
+injectSpeedInsights();
 
 // Register Service Worker for Mobile Keep-Alive & Real-Time Background Notifications
 if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
