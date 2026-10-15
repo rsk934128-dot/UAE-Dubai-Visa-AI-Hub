@@ -11,6 +11,7 @@ import {
   Clock, 
   Mail, 
   MessageSquare,
+  MessageCircle,
   FileText,
   ExternalLink,
   ShieldAlert,
@@ -28,11 +29,19 @@ import {
   History,
   Layers,
   ChevronRight,
-  QrCode
+  QrCode,
+  PieChart as PieChartIcon,
+  FileDown,
+  RefreshCw,
+  Camera,
+  LayoutGrid,
+  Table as TableIcon,
+  Globe
 } from 'lucide-react';
 import { VisaApplication, PassportAuditResult, DocumentAuditHistoryItem, ApplicationAuditEvent } from '../types';
 import { formatDate } from '../lib/utils';
 import { useLanguage } from '../context/LanguageContext';
+import { ApplicationsStatusDoughnutSection } from './ApplicationsStatusDoughnutSection';
 import { PassportAuditStatisticsDashboard } from './PassportAuditStatisticsDashboard';
 import { VisaDemandForecastWidget } from './VisaDemandForecastWidget';
 import { VisaFeeCalculatorModal } from './VisaFeeCalculatorModal';
@@ -40,6 +49,19 @@ import { TemplateManagerModal } from './TemplateManagerModal';
 import { DocumentHistoryModal } from './DocumentHistoryModal';
 import { AgencyAuditTrailView } from './AgencyAuditTrailView';
 import { ApplicationQrCodeModal } from './ApplicationQrCodeModal';
+import { PWABuilderModal } from './PWABuilderModal';
+import { WhatsAppShareModal } from './WhatsAppShareModal';
+import { 
+  WhatsAppAuditPayload, 
+  WhatsAppStatusTemplateId,
+  getWhatsAppPayloadFromApplication, 
+  getRecommendedTemplateForStatus 
+} from '../utils/whatsappUtils';
+import { generateApplicationAuditTrailPdf } from '../lib/auditTrailPdfGenerator';
+import { generateApplicationDossierPdf } from '../lib/applicationDossierPdfGenerator';
+import { ApplicationDossierPdfModal } from './ApplicationDossierPdfModal';
+import { CameraQrScannerModal } from './CameraQrScannerModal';
+import { ApplicantNationalityMarketMap } from './ApplicantNationalityMarketMap';
 
 interface AgencyCrmDashboardProps {
   applications: VisaApplication[];
@@ -72,7 +94,13 @@ export const AgencyCrmDashboard: React.FC<AgencyCrmDashboardProps> = ({
   const [selectedApp, setSelectedApp] = useState<VisaApplication | null>(null);
   const [selectedDocHistoryApp, setSelectedDocHistoryApp] = useState<VisaApplication | null>(null);
   const [selectedQrApp, setSelectedQrApp] = useState<VisaApplication | null>(null);
+  const [whatsAppPayload, setWhatsAppPayload] = useState<WhatsAppAuditPayload | null>(null);
+  const [whatsAppTargetApp, setWhatsAppTargetApp] = useState<VisaApplication | null>(null);
+  const [whatsAppInitialTemplate, setWhatsAppInitialTemplate] = useState<WhatsAppStatusTemplateId | undefined>(undefined);
+  const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
+  const [dossierLayoutMode, setDossierLayoutMode] = useState<'cards' | 'table'>('cards');
   const [showNewModal, setShowNewModal] = useState(false);
+  const [showPWABuilder, setShowPWABuilder] = useState(false);
 
   // Check URL query parameters for direct mobile QR scan links (e.g. ?appId=...&action=documents)
   useEffect(() => {
@@ -107,7 +135,8 @@ export const AgencyCrmDashboard: React.FC<AgencyCrmDashboardProps> = ({
   const [showFeeCalculator, setShowFeeCalculator] = useState(false);
   const [calculatorVisaType, setCalculatorVisaType] = useState<string>('30-Day Single Entry Tourist Visa');
   const [calculatorNationality, setCalculatorNationality] = useState<string>('Bangladeshi');
-  const [analyticsTab, setAnalyticsTab] = useState<'demand-forecast' | 'audit-metrics'>('demand-forecast');
+  const [analyticsTab, setAnalyticsTab] = useState<'status-doughnut' | 'nationality-markets' | 'demand-forecast' | 'audit-metrics'>('status-doughnut');
+  const [nationalityFilter, setNationalityFilter] = useState<string>('ALL');
   
   // CRM Dashboard View Tab state
   const [crmViewTab, setCrmViewTab] = useState<'dossiers' | 'audit-trail' | 'analytics'>('dossiers');
@@ -133,6 +162,55 @@ export const AgencyCrmDashboard: React.FC<AgencyCrmDashboardProps> = ({
   const [newUrgency, setNewUrgency] = useState<'Standard' | 'Express 24h' | 'Emergency 6h'>('Standard');
   const [newNotes, setNewNotes] = useState('');
   const [attachedAudit, setAttachedAudit] = useState<PassportAuditResult | null>(null);
+  const [generatingPdfAppId, setGeneratingPdfAppId] = useState<string | null>(null);
+  const [showDossierPdfModal, setShowDossierPdfModal] = useState(false);
+  const [dossierPdfApp, setDossierPdfApp] = useState<VisaApplication | null>(null);
+  const [showQrScannerModal, setShowQrScannerModal] = useState(false);
+
+  const handleLinkPhysicalDocument = (
+    appId: string,
+    newDoc: DocumentAuditHistoryItem,
+    event: ApplicationAuditEvent
+  ) => {
+    const target = applications.find(a => a.id === appId);
+    if (!target) return;
+    const existingDocs = target.documentHistory && target.documentHistory.length > 0
+      ? target.documentHistory
+      : [];
+    const updatedDocs = [newDoc, ...existingDocs];
+    if (onUpdateApplicationDocuments) {
+      onUpdateApplicationDocuments(appId, updatedDocs);
+    }
+    if (onAddAuditEvent) {
+      onAddAuditEvent(appId, event);
+    }
+  };
+
+  const handleExportApplicationAuditPdf = async (app: VisaApplication) => {
+    try {
+      setGeneratingPdfAppId(app.id);
+      await generateApplicationDossierPdf({
+        application: app,
+        agencyName: 'UAE & Dubai Visa AI Hub',
+        consultantName: app.assignedAgent || 'Senior Immigration Processing Officer',
+        includePassportData: true,
+        includeStatusLogs: true,
+        includeAuditTrail: true,
+        includeDocumentHistory: true,
+        includeQrCode: true
+      });
+    } catch (err) {
+      console.error('Failed to generate dossier PDF report:', err);
+      alert('Could not generate PDF dossier report. Please try again.');
+    } finally {
+      setGeneratingPdfAppId(null);
+    }
+  };
+
+  const handleOpenDossierPdfModal = (app?: VisaApplication) => {
+    setDossierPdfApp(app || selectedApp || applications[0] || null);
+    setShowDossierPdfModal(true);
+  };
 
   const handleOpenFeeCalculator = (visaType?: string, nationality?: string) => {
     if (visaType) setCalculatorVisaType(visaType);
@@ -147,6 +225,20 @@ export const AgencyCrmDashboard: React.FC<AgencyCrmDashboardProps> = ({
       setTemplateTargetApp(applications[0]);
     }
     setShowTemplateManager(true);
+  };
+
+  const handleOpenWhatsAppForApp = (app: VisaApplication, templateId?: WhatsAppStatusTemplateId) => {
+    const payload = getWhatsAppPayloadFromApplication(app);
+    setWhatsAppPayload(payload);
+    setWhatsAppTargetApp(app);
+    setWhatsAppInitialTemplate(templateId || getRecommendedTemplateForStatus(app.status));
+    setShowWhatsAppModal(true);
+  };
+
+  const handleLogWhatsAppAuditTrail = (event: Partial<ApplicationAuditEvent>) => {
+    if (whatsAppTargetApp && onAddAuditEvent) {
+      onAddAuditEvent(whatsAppTargetApp.id, event);
+    }
   };
 
   const handleApplyCalculatedFee = (feeDetails: {
@@ -188,6 +280,11 @@ export const AgencyCrmDashboard: React.FC<AgencyCrmDashboardProps> = ({
   };
 
   const filteredApps = applications.filter((app) => {
+    const matchesNationality = nationalityFilter === 'ALL' || 
+      (app.nationality && app.nationality.toLowerCase() === nationalityFilter.toLowerCase());
+
+    if (!matchesNationality) return false;
+
     const query = searchTerm.trim().toLowerCase();
     if (!query) {
       return statusFilter === 'ALL' || app.status === statusFilter;
@@ -276,33 +373,61 @@ export const AgencyCrmDashboard: React.FC<AgencyCrmDashboardProps> = ({
     <div className="space-y-6" id="agency-crm-container">
       {/* Top Metric Bar */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+        <button
+          type="button"
+          onClick={() => setStatusFilter('ALL')}
+          className={`bg-slate-900 border p-4 rounded-xl text-left transition-all cursor-pointer hover:border-slate-700 ${
+            statusFilter === 'ALL' ? 'ring-1 ring-amber-500/50 border-amber-500/50' : 'border-slate-800'
+          }`}
+          title="Show all applications"
+        >
           <span className="text-[11px] font-mono uppercase text-slate-400 block">Total Active Files</span>
           <span className="text-2xl font-bold font-mono text-white mt-1 block">
             {applications.length}
           </span>
-        </div>
+        </button>
 
-        <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+        <button
+          type="button"
+          onClick={() => setStatusFilter(statusFilter === 'Audited - Passed' ? 'ALL' : 'Audited - Passed')}
+          className={`bg-slate-900 border p-4 rounded-xl text-left transition-all cursor-pointer hover:border-emerald-700 ${
+            statusFilter === 'Audited - Passed' || statusFilter === 'Approved' ? 'ring-1 ring-emerald-500/50 border-emerald-500/50' : 'border-slate-800'
+          }`}
+          title="Filter to audited & approved files"
+        >
           <span className="text-[11px] font-mono uppercase text-emerald-400 block">Audited &amp; Cleared</span>
           <span className="text-2xl font-bold font-mono text-emerald-300 mt-1 block">
             {applications.filter(a => a.status === 'Audited - Passed' || a.status === 'Approved').length}
           </span>
-        </div>
+        </button>
 
-        <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+        <button
+          type="button"
+          onClick={() => setStatusFilter(statusFilter === 'Audited - Flagged' ? 'ALL' : 'Audited - Flagged')}
+          className={`bg-slate-900 border p-4 rounded-xl text-left transition-all cursor-pointer hover:border-red-700 ${
+            statusFilter === 'Audited - Flagged' ? 'ring-1 ring-red-500/50 border-red-500/50' : 'border-slate-800'
+          }`}
+          title="Filter to flagged files requiring rectification"
+        >
           <span className="text-[11px] font-mono uppercase text-red-400 block">Flagged / Rectification</span>
           <span className="text-2xl font-bold font-mono text-red-300 mt-1 block">
             {applications.filter(a => a.status === 'Audited - Flagged').length}
           </span>
-        </div>
+        </button>
 
-        <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+        <button
+          type="button"
+          onClick={() => setStatusFilter(statusFilter === 'Submitted to GDRFA/ICP' ? 'ALL' : 'Submitted to GDRFA/ICP')}
+          className={`bg-slate-900 border p-4 rounded-xl text-left transition-all cursor-pointer hover:border-sky-700 ${
+            statusFilter === 'Submitted to GDRFA/ICP' || statusFilter === 'In Process' ? 'ring-1 ring-sky-500/50 border-sky-500/50' : 'border-slate-800'
+          }`}
+          title="Filter to files submitted to GDRFA / ICP"
+        >
           <span className="text-[11px] font-mono uppercase text-sky-400 block">Submitted to GDRFA</span>
           <span className="text-2xl font-bold font-mono text-sky-300 mt-1 block">
             {applications.filter(a => a.status === 'Submitted to GDRFA/ICP' || a.status === 'In Process').length}
           </span>
-        </div>
+        </button>
       </div>
 
       {/* CRM Primary Navigation Bar */}
@@ -380,6 +505,40 @@ export const AgencyCrmDashboard: React.FC<AgencyCrmDashboardProps> = ({
           </button>
 
           <button
+            id="btn-open-dossier-pdf-header"
+            type="button"
+            onClick={() => handleOpenDossierPdfModal()}
+            className="bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/35 text-amber-300 text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 cursor-pointer shadow-sm transition-all"
+            title="Export official application dossier as a professional PDF report containing passport data, status logs & audit history"
+          >
+            <FileDown className="w-3.5 h-3.5 text-amber-400" />
+            <span>Dossier PDF Report</span>
+          </button>
+
+          <button
+            id="btn-open-camera-qr-scanner-header"
+            type="button"
+            onClick={() => setShowQrScannerModal(true)}
+            className="bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-emerald-300 text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 cursor-pointer shadow-sm transition-all"
+            title="Scan QR code using camera to quickly link physical documents to existing digital files"
+          >
+            <Scan className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Scan & Link Document</span>
+          </button>
+
+          <button
+            id="btn-open-pwabuilder-crm"
+            type="button"
+            onClick={() => setShowPWABuilder(true)}
+            className="hidden sm:flex bg-emerald-950/60 hover:bg-emerald-900/60 border border-emerald-700/60 text-emerald-300 text-xs font-semibold px-2.5 py-1.5 rounded-lg items-center gap-1.5 cursor-pointer shadow-sm transition-colors"
+            title="PWABuilder 100% Store Readiness & Native Packaging Hub"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+            <span>PWABuilder</span>
+            <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">100%</span>
+          </button>
+
+          <button
             onClick={() => setShowNewModal(true)}
             className="bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 cursor-pointer shadow-md transition-colors"
           >
@@ -408,7 +567,33 @@ export const AgencyCrmDashboard: React.FC<AgencyCrmDashboardProps> = ({
       {/* VIEW: ANALYTICS TAB */}
       {crmViewTab === 'analytics' && (
         <div className="space-y-4">
-          <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
+          <div className="flex flex-wrap items-center gap-2 border-b border-slate-800 pb-2">
+            <button
+              id="crm-status-doughnut-tab-btn"
+              onClick={() => setAnalyticsTab('status-doughnut')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                analyticsTab === 'status-doughnut'
+                  ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-850 bg-slate-900/60'
+              }`}
+            >
+              <PieChartIcon className="w-3.5 h-3.5" />
+              <span>🍩 Applications by Status (Recharts Doughnut)</span>
+            </button>
+
+            <button
+              id="crm-nationality-markets-tab-btn"
+              onClick={() => setAnalyticsTab('nationality-markets')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                analyticsTab === 'nationality-markets'
+                  ? 'bg-sky-500 text-slate-950 shadow-md shadow-sky-500/20'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-850 bg-slate-900/60'
+              }`}
+            >
+              <Globe className="w-3.5 h-3.5" />
+              <span>🗺️ {language === 'ar' ? 'الأسواق الجغرافية (D3.js)' : language === 'bn' ? 'ভৌগোলিক বাজার ও জাতীয়তা বিশ্লেষণ (D3.js)' : 'Geographic Markets by Nationality (D3.js)'}</span>
+            </button>
+
             <button
               id="crm-demand-forecast-tab-btn"
               onClick={() => setAnalyticsTab('demand-forecast')}
@@ -419,7 +604,7 @@ export const AgencyCrmDashboard: React.FC<AgencyCrmDashboardProps> = ({
               }`}
             >
               <TrendingUp className="w-3.5 h-3.5" />
-              📈 3-Month Peak Visa Demand Forecast (Recharts)
+              <span>📈 3-Month Peak Visa Demand Forecast (Recharts)</span>
             </button>
 
             <button
@@ -432,12 +617,33 @@ export const AgencyCrmDashboard: React.FC<AgencyCrmDashboardProps> = ({
               }`}
             >
               <FileCheck className="w-3.5 h-3.5" />
-              {language === 'ar' ? '📊 إحصائيات تدقيق جوازات السفر (Recharts)' : '📊 Passport Audit Statistics (Recharts)'}
+              <span>{language === 'ar' ? '📊 إحصائيات تدقيق جوازات السفر (Recharts)' : '📊 Passport Audit Statistics (Recharts)'}</span>
             </button>
             <span id="crm-audit-metrics-tab-btn" className="hidden" onClick={() => setAnalyticsTab('audit-metrics')} />
           </div>
 
-          {analyticsTab === 'demand-forecast' ? (
+          {analyticsTab === 'status-doughnut' ? (
+            <ApplicationsStatusDoughnutSection
+              applications={applications}
+              selectedStatus={statusFilter}
+              onSelectStatus={(status) => {
+                setStatusFilter(status);
+                setCrmViewTab('dossiers');
+              }}
+              onClearStatusFilter={() => setStatusFilter('ALL')}
+            />
+          ) : analyticsTab === 'nationality-markets' ? (
+            <ApplicantNationalityMarketMap
+              applications={applications}
+              selectedNationality={nationalityFilter !== 'ALL' ? nationalityFilter : null}
+              onSelectNationality={(nat) => {
+                setNationalityFilter(nat);
+                if (nat !== 'ALL') {
+                  setCrmViewTab('dossiers');
+                }
+              }}
+            />
+          ) : analyticsTab === 'demand-forecast' ? (
             <VisaDemandForecastWidget applications={applications} />
           ) : (
             <PassportAuditStatisticsDashboard
@@ -451,8 +657,15 @@ export const AgencyCrmDashboard: React.FC<AgencyCrmDashboardProps> = ({
       {/* VIEW: DOSSIERS TAB */}
       {crmViewTab === 'dossiers' && (
         <div className="space-y-4">
+          {/* Applications by Status (Recharts Doughnut Chart Data Visualization Section) */}
+          <ApplicationsStatusDoughnutSection
+            applications={applications}
+            selectedStatus={statusFilter}
+            onSelectStatus={(status) => setStatusFilter(status)}
+            onClearStatusFilter={() => setStatusFilter('ALL')}
+          />
 
-      {/* Control Bar: Search, Filters, New Intake */}
+          {/* Control Bar: Search, Filters, New Intake */}
       <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-4 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
         <div className="flex flex-1 flex-col sm:flex-row items-stretch sm:items-center gap-3">
           <div className="relative flex-1" id="agency-crm-search-bar">
@@ -498,18 +711,76 @@ export const AgencyCrmDashboard: React.FC<AgencyCrmDashboardProps> = ({
               </select>
             </div>
 
-            {(searchTerm || statusFilter !== 'ALL') && (
+            {(searchTerm || statusFilter !== 'ALL' || nationalityFilter !== 'ALL') && (
               <button
                 type="button"
                 onClick={() => {
                   setSearchTerm('');
                   setStatusFilter('ALL');
+                  setNationalityFilter('ALL');
                 }}
                 className="text-[11px] text-amber-400 hover:text-amber-300 underline font-medium cursor-pointer whitespace-nowrap px-1"
               >
                 Reset Filters
               </button>
             )}
+
+            <button
+              type="button"
+              id="btn-open-d3-market-map"
+              onClick={() => {
+                setCrmViewTab('analytics');
+                setAnalyticsTab('nationality-markets');
+              }}
+              className="bg-slate-950 hover:bg-slate-800 text-sky-300 border border-slate-800 hover:border-sky-500/50 text-xs font-semibold px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 cursor-pointer transition-colors shadow-xs"
+              title="Open D3.js Applicant Nationality Market Map"
+            >
+              <Globe className="w-3.5 h-3.5 text-sky-400" />
+              <span className="hidden md:inline">D3 Markets</span>
+            </button>
+
+            <button
+              type="button"
+              id="btn-search-qr-scanner"
+              onClick={() => setShowQrScannerModal(true)}
+              className="bg-slate-950 hover:bg-slate-800 text-emerald-300 border border-slate-800 hover:border-emerald-500/50 text-xs font-semibold px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 cursor-pointer transition-colors shadow-xs"
+              title="Scan physical document QR code using camera to locate file or link"
+            >
+              <Camera className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="hidden md:inline">Scan QR</span>
+            </button>
+
+            {/* Layout View Mode Toggle */}
+            <div className="flex items-center bg-slate-950 border border-slate-800 rounded-lg p-0.5">
+              <button
+                type="button"
+                id="btn-view-mode-cards"
+                onClick={() => setDossierLayoutMode('cards')}
+                className={`px-2 py-1 rounded text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer ${
+                  dossierLayoutMode === 'cards'
+                    ? 'bg-amber-500 text-slate-950 shadow-xs'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+                title="Display applications as visual cards with 'Share via WhatsApp' button"
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Cards</span>
+              </button>
+              <button
+                type="button"
+                id="btn-view-mode-table"
+                onClick={() => setDossierLayoutMode('table')}
+                className={`px-2 py-1 rounded text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer ${
+                  dossierLayoutMode === 'table'
+                    ? 'bg-amber-500 text-slate-950 shadow-xs'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+                title="Display applications as compact table"
+              >
+                <TableIcon className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Table</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -546,15 +817,28 @@ export const AgencyCrmDashboard: React.FC<AgencyCrmDashboardProps> = ({
       </div>
 
       {/* Search results summary when filtering */}
-      {(searchTerm || statusFilter !== 'ALL') && (
+      {(searchTerm || statusFilter !== 'ALL' || nationalityFilter !== 'ALL') && (
         <div className="flex items-center justify-between text-xs px-1 text-slate-400">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span>
               Showing <span className="text-amber-400 font-mono font-bold">{filteredApps.length}</span> of {applications.length} dossiers
             </span>
             {searchTerm && (
               <span className="bg-slate-800 text-slate-300 px-2 py-0.5 rounded text-[11px] font-mono border border-slate-700">
                 "{searchTerm}"
+              </span>
+            )}
+            {nationalityFilter !== 'ALL' && (
+              <span className="bg-sky-950 text-sky-300 px-2 py-0.5 rounded text-[11px] font-mono border border-sky-800 flex items-center gap-1.5">
+                <span>Origin: {nationalityFilter}</span>
+                <button
+                  type="button"
+                  onClick={() => setNationalityFilter('ALL')}
+                  className="hover:text-white cursor-pointer font-bold leading-none"
+                  title="Remove nationality filter"
+                >
+                  ×
+                </button>
               </span>
             )}
           </div>
@@ -564,188 +848,391 @@ export const AgencyCrmDashboard: React.FC<AgencyCrmDashboardProps> = ({
         </div>
       )}
 
-      {/* Applications Table */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-slate-950 text-slate-400 uppercase font-mono tracking-wider text-[10px] border-b border-slate-800">
-              <tr>
-                <th className="px-4 py-3">File ID / Urgency</th>
-                <th className="px-4 py-3">Applicant Name</th>
-                <th className="px-4 py-3">Passport No.</th>
-                <th className="px-4 py-3">Visa Category</th>
-                <th className="px-4 py-3">Audit &amp; Immigration Status</th>
-                <th className="px-4 py-3">Last Activity</th>
-                <th className="px-4 py-3 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800 text-slate-200">
-              {filteredApps.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-slate-400">
-                    <div className="max-w-md mx-auto space-y-3">
-                      <div className="w-12 h-12 mx-auto rounded-full bg-slate-800/80 flex items-center justify-center text-slate-500">
-                        <Search className="w-6 h-6" />
-                      </div>
-                      <h4 className="text-sm font-semibold text-slate-200">No matching applications found</h4>
-                      <p className="text-xs text-slate-400">
-                        No client records match the applicant name or passport number <span className="text-amber-400 font-mono">"{searchTerm}"</span>. Try adjusting your query or resetting filters.
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSearchTerm('');
-                          setStatusFilter('ALL');
-                        }}
-                        className="inline-flex items-center gap-1.5 text-xs bg-slate-800 hover:bg-slate-700 text-amber-400 px-3.5 py-1.5 rounded-lg border border-slate-700 transition-colors cursor-pointer font-medium"
-                      >
-                        <X className="w-3 h-3" />
-                        <span>Clear Search &amp; Show All</span>
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                filteredApps.map((app) => (
-                <tr key={app.id} className="hover:bg-slate-800/40 transition-colors">
-                  <td className="px-4 py-3 font-mono">
-                    <span className="font-bold text-amber-400 block">{app.id}</span>
-                    <span className={`text-[10px] px-1.5 py-0.2 rounded font-sans ${
-                      app.urgency === 'Emergency 6h' ? 'bg-red-500/20 text-red-300' :
-                      app.urgency === 'Express 24h' ? 'bg-amber-500/20 text-amber-300' :
-                      'text-slate-500'
-                    }`}>
-                      {app.urgency}
-                    </span>
-                  </td>
-
-                  <td className="px-4 py-3">
-                    <div className="font-semibold text-white flex items-center gap-1.5">
-                      <span>{app.applicantName}</span>
-                      {app.passportAudit && (
-                        <span className="text-[9px] bg-amber-500/10 text-amber-300 border border-amber-500/30 px-1 rounded font-mono" title={`OCR Score: ${app.passportAudit.overallScore}/100`}>
-                          OCR {app.passportAudit.overallScore}
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-[11px] text-slate-400">{app.nationality}</div>
-                  </td>
-
-                  <td className="px-4 py-3 font-mono font-medium">
-                    {app.passportNumber}
-                  </td>
-
-                  <td className="px-4 py-3 text-slate-300 max-w-xs truncate" title={app.visaType}>
-                    {app.visaType}
-                  </td>
-
-                  <td className="px-4 py-3">
-                    <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md font-medium text-[11px] ${
-                      app.status === 'Approved' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' :
-                      app.status === 'Audited - Passed' ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' :
-                      app.status === 'Audited - Flagged' ? 'bg-red-950 text-red-400 border border-red-800' :
-                      app.status === 'Submitted to GDRFA/ICP' ? 'bg-sky-950 text-sky-400 border border-sky-800' :
-                      'bg-slate-800 text-slate-300'
-                    }`}>
-                      {app.status === 'Audited - Passed' && <CheckCircle2 className="w-3 h-3" />}
-                      {app.status === 'Audited - Flagged' && <AlertTriangle className="w-3 h-3" />}
-                      {app.status === 'Submitted to GDRFA/ICP' && <Clock className="w-3 h-3" />}
-                      {app.status}
-                    </span>
-                  </td>
-
-                  <td className="px-4 py-3 text-slate-400 text-[11px]">
-                    {formatDate(app.updatedAt)}
-                  </td>
-
-                  <td className="px-4 py-3 text-right">
-                    <div className="flex items-center justify-end gap-1.5">
-                      <button
-                        onClick={() => setSelectedDocHistoryApp(app)}
-                        title={`View document versions & audit history for ${app.applicantName}`}
-                        className="text-xs bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700/80 px-2.5 py-1 rounded transition-colors cursor-pointer flex items-center gap-1.5 font-medium"
-                      >
-                        <History className="w-3.5 h-3.5 text-amber-400" />
-                        <span>{language === 'ar' ? 'سجل الوثائق' : 'Doc History'}</span>
-                        <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30">
-                          {app.documentHistory && app.documentHistory.length > 0
-                            ? app.documentHistory.length
-                            : (app.passportAudit ? 1 : 0)}
-                        </span>
-                      </button>
-
-                      <button
-                        onClick={() => handleOpenTemplateManager(app)}
-                        title="Draft or copy message/cover letter from Template Manager"
-                        className="text-xs bg-slate-800 hover:bg-slate-700 text-sky-300 border border-slate-700/80 px-2 py-1 rounded transition-colors cursor-pointer flex items-center gap-1"
-                      >
-                        <FileText className="w-3 h-3 text-sky-400" />
-                        <span>Draft</span>
-                      </button>
-
-                      <button
-                        onClick={() => handleOpenFeeCalculator(app.visaType, app.nationality)}
-                        title="Calculate fee estimate for this application"
-                        className="text-xs bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700/80 px-2 py-1 rounded transition-colors cursor-pointer flex items-center gap-1"
-                      >
-                        <Coins className="w-3 h-3 text-amber-400" />
-                        <span>Fees</span>
-                      </button>
-
-                      <button
-                        id={`btn-open-audit-trail-${app.id}`}
-                        onClick={() => {
-                          setAuditTrailTargetAppId(app.id);
-                          setCrmViewTab('audit-trail');
-                        }}
-                        title={`View chronological audit trail for ${app.applicantName}`}
-                        className="text-xs bg-slate-800 hover:bg-slate-700 text-sky-300 border border-slate-700/80 px-2 py-1 rounded transition-colors cursor-pointer flex items-center gap-1 font-medium"
-                      >
-                        <History className="w-3.5 h-3.5 text-sky-400" />
-                        <span>Audit</span>
-                        <span className="text-[10px] font-mono px-1 py-0.2 rounded bg-sky-950 text-sky-300 border border-sky-800 font-bold">
-                          {app.auditTrail?.length || 0}
-                        </span>
-                      </button>
-
-                      <button
-                        id={`btn-open-qr-${app.id}`}
-                        onClick={() => setSelectedQrApp(app)}
-                        title={`Generate scannable QR Code linking to digital documents / status for ${app.applicantName}`}
-                        className="text-xs bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 px-2 py-1 rounded transition-colors cursor-pointer flex items-center gap-1 font-semibold"
-                      >
-                        <QrCode className="w-3.5 h-3.5 text-amber-400" />
-                        <span>QR</span>
-                      </button>
-
-                      <button
-                        onClick={() => {
-                          setSelectedApp(app);
-                          setInspectModalTab('overview');
-                        }}
-                        className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 px-2.5 py-1 rounded transition-colors cursor-pointer"
-                      >
-                        Inspect
-                      </button>
-
-                      <button
-                        onClick={() => onSendEmailUpdate(app)}
-                        disabled={isSendingEmail}
-                        title={`Notify ${app.contactEmail} via Gmail`}
-                        className="text-xs bg-sky-950 hover:bg-sky-900 text-sky-300 border border-sky-800 px-2.5 py-1 rounded flex items-center gap-1 transition-colors cursor-pointer"
-                      >
-                        <Mail className="w-3 h-3" />
-                        Send Alert
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))
-              )}
-            </tbody>
-          </table>
+      {/* Empty State when no applications match search/filter */}
+      {filteredApps.length === 0 ? (
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-12 text-center text-slate-400">
+          <div className="max-w-md mx-auto space-y-3">
+            <div className="w-12 h-12 mx-auto rounded-full bg-slate-800/80 flex items-center justify-center text-slate-500">
+              <Search className="w-6 h-6" />
+            </div>
+            <h4 className="text-sm font-semibold text-slate-200">No matching applications found</h4>
+            <p className="text-xs text-slate-400">
+              No client records match the applicant name or passport number <span className="text-amber-400 font-mono">"{searchTerm}"</span>. Try adjusting your query or resetting filters.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setSearchTerm('');
+                setStatusFilter('ALL');
+              }}
+              className="inline-flex items-center gap-1.5 text-xs bg-slate-800 hover:bg-slate-700 text-amber-400 px-3.5 py-1.5 rounded-lg border border-slate-700 transition-colors cursor-pointer font-medium"
+            >
+              <X className="w-3 h-3" />
+              <span>Clear Search &amp; Show All</span>
+            </button>
+          </div>
         </div>
-      </div>
+      ) : dossierLayoutMode === 'cards' ? (
+        /* APPLICATION CARDS GRID VIEW */
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredApps.map((app) => (
+            <div
+              key={app.id}
+              className="bg-slate-900 border border-slate-800 hover:border-slate-700/80 rounded-xl p-4 space-y-3 shadow-sm hover:shadow-md transition-all flex flex-col justify-between group relative"
+            >
+              {/* Card Header: Avatar, Name, File ID, Urgency */}
+              <div className="space-y-2.5">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    {app.avatarUrl ? (
+                      <img
+                        src={app.avatarUrl}
+                        alt={app.applicantName}
+                        referrerPolicy="no-referrer"
+                        className="w-10 h-10 rounded-full object-cover ring-2 ring-amber-500/40 shrink-0"
+                      />
+                    ) : (
+                      <div className="w-10 h-10 rounded-full bg-slate-800 text-amber-400 font-bold flex items-center justify-center text-sm shrink-0 border border-slate-700">
+                        {app.applicantName.charAt(0)}
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-bold text-white text-sm truncate" title={app.applicantName}>
+                          {app.applicantName}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-[11px] text-slate-400">
+                        <span>{app.nationality}</span>
+                        <span>•</span>
+                        <span className="font-mono text-amber-400 font-bold">{app.id}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <span className={`text-[10px] px-2 py-0.5 rounded font-sans font-medium shrink-0 ${
+                    app.urgency === 'Emergency 6h' ? 'bg-red-500/20 text-red-300 border border-red-500/30' :
+                    app.urgency === 'Express 24h' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' :
+                    'bg-slate-800 text-slate-400 border border-slate-700'
+                  }`}>
+                    {app.urgency}
+                  </span>
+                </div>
+
+                {/* Workflow Status & Compliance Benchmark Pill */}
+                <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-800/60">
+                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md font-medium text-[11px] ${
+                    app.status === 'Approved' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' :
+                    app.status === 'Audited - Passed' ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' :
+                    app.status === 'Audited - Flagged' ? 'bg-red-950 text-red-400 border border-red-800' :
+                    app.status === 'Submitted to GDRFA/ICP' ? 'bg-sky-950 text-sky-400 border border-sky-800' :
+                    'bg-slate-800 text-slate-300'
+                  }`}>
+                    {app.status === 'Approved' && <CheckCircle2 className="w-3 h-3 text-emerald-400" />}
+                    {app.status === 'Audited - Passed' && <CheckCircle2 className="w-3 h-3 text-emerald-400" />}
+                    {app.status === 'Audited - Flagged' && <AlertTriangle className="w-3 h-3 text-red-400" />}
+                    {app.status === 'Submitted to GDRFA/ICP' && <Clock className="w-3 h-3 text-sky-400" />}
+                    <span>{app.status}</span>
+                  </span>
+
+                  {app.passportAudit ? (
+                    <span className="text-[10px] bg-amber-500/10 text-amber-300 border border-amber-500/30 px-1.5 py-0.5 rounded font-mono font-semibold">
+                      OCR {app.passportAudit.overallScore}/100
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-slate-500 font-mono">
+                      Unscanned
+                    </span>
+                  )}
+                </div>
+
+                {/* Core Dossier Metadata */}
+                <div className="bg-slate-950/70 rounded-lg p-2.5 border border-slate-800/80 space-y-1.5 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-400 text-[11px]">Passport:</span>
+                    <span className="font-mono text-white font-bold">{app.passportNumber}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-400 text-[11px]">Visa Category:</span>
+                    <span className="text-slate-200 text-right truncate max-w-[180px]" title={app.visaType}>
+                      {app.visaType}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-400 text-[11px]">WhatsApp / Mobile:</span>
+                    <span className="font-mono text-emerald-400 text-[11px]">
+                      {app.contactPhone || 'No phone registered'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-800/50">
+                    <span>Officer: <strong className="text-slate-300">{app.assignedAgent || 'Unassigned'}</strong></span>
+                    <span>{formatDate(app.updatedAt)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* CARD ACTION BUTTONS */}
+              <div className="space-y-2 pt-2 border-t border-slate-800/80">
+                {/* 1. PRIMARY HIGHLIGHT: Share via WhatsApp button */}
+                <button
+                  id={`btn-share-whatsapp-card-${app.id}`}
+                  type="button"
+                  onClick={() => handleOpenWhatsAppForApp(app)}
+                  className="w-full bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/35 hover:border-emerald-500/50 text-emerald-300 hover:text-emerald-200 py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm group active:scale-[0.98]"
+                  title={`Send automated WhatsApp status update template directly to ${app.applicantName} (${app.contactPhone || 'Enter phone'})`}
+                >
+                  <MessageCircle className="w-4 h-4 text-emerald-400 fill-emerald-500/20 group-hover:scale-110 transition-transform shrink-0" />
+                  <span>Share via WhatsApp</span>
+                </button>
+
+                {/* 2. SECONDARY ACTIONS ROW */}
+                <div className="grid grid-cols-4 gap-1.5">
+                  <button
+                    onClick={() => {
+                      setSelectedApp(app);
+                      setInspectModalTab('overview');
+                    }}
+                    title="Inspect application dossier"
+                    className="text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-200 py-1.5 px-1.5 rounded-md transition-colors cursor-pointer text-center font-medium"
+                  >
+                    Inspect
+                  </button>
+
+                  <button
+                    onClick={() => setSelectedDocHistoryApp(app)}
+                    title={`View document versions & audit history for ${app.applicantName}`}
+                    className="text-[11px] bg-slate-800 hover:bg-slate-700 text-amber-300 py-1.5 px-1.5 rounded-md transition-colors cursor-pointer flex items-center justify-center gap-1 font-medium"
+                  >
+                    <History className="w-3 h-3 text-amber-400" />
+                    <span>Docs ({app.documentHistory?.length || (app.passportAudit ? 1 : 0)})</span>
+                  </button>
+
+                  <button
+                    onClick={() => handleExportApplicationAuditPdf(app)}
+                    disabled={generatingPdfAppId === app.id}
+                    title="Export professional PDF dossier report"
+                    className="text-[11px] bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 py-1.5 px-1.5 rounded-md transition-colors cursor-pointer flex items-center justify-center gap-1 font-semibold disabled:opacity-50"
+                  >
+                    {generatingPdfAppId === app.id ? (
+                      <RefreshCw className="w-3 h-3 animate-spin text-amber-400" />
+                    ) : (
+                      <FileDown className="w-3 h-3 text-amber-400" />
+                    )}
+                    <span>PDF</span>
+                  </button>
+
+                  <button
+                    onClick={() => setSelectedQrApp(app)}
+                    title="Generate QR code"
+                    className="text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-300 py-1.5 px-1.5 rounded-md transition-colors cursor-pointer flex items-center justify-center gap-1 font-medium"
+                  >
+                    <QrCode className="w-3 h-3 text-amber-400" />
+                    <span>QR</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        /* COMPACT TABLE VIEW */
+        <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-sm">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-950 text-slate-400 uppercase font-mono tracking-wider text-[10px] border-b border-slate-800">
+                <tr>
+                  <th className="px-4 py-3">File ID / Urgency</th>
+                  <th className="px-4 py-3">Applicant Name</th>
+                  <th className="px-4 py-3">Passport No.</th>
+                  <th className="px-4 py-3">Visa Category</th>
+                  <th className="px-4 py-3">Audit &amp; Immigration Status</th>
+                  <th className="px-4 py-3">Last Activity</th>
+                  <th className="px-4 py-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800 text-slate-200">
+                {filteredApps.map((app) => (
+                  <tr key={app.id} className="hover:bg-slate-800/40 transition-colors">
+                    <td className="px-4 py-3 font-mono">
+                      <span className="font-bold text-amber-400 block">{app.id}</span>
+                      <span className={`text-[10px] px-1.5 py-0.2 rounded font-sans ${
+                        app.urgency === 'Emergency 6h' ? 'bg-red-500/20 text-red-300' :
+                        app.urgency === 'Express 24h' ? 'bg-amber-500/20 text-amber-300' :
+                        'text-slate-500'
+                      }`}>
+                        {app.urgency}
+                      </span>
+                    </td>
+
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2.5">
+                        {app.avatarUrl ? (
+                          <img 
+                            src={app.avatarUrl} 
+                            alt={app.applicantName} 
+                            referrerPolicy="no-referrer"
+                            className="w-8 h-8 rounded-full object-cover ring-1 ring-amber-500/40 shrink-0" 
+                          />
+                        ) : (
+                          <div className="w-8 h-8 rounded-full bg-slate-800 text-amber-400 font-bold flex items-center justify-center text-xs shrink-0 border border-slate-700">
+                            {app.applicantName.charAt(0)}
+                          </div>
+                        )}
+                        <div>
+                          <div className="font-semibold text-white flex items-center gap-1.5">
+                            <span>{app.applicantName}</span>
+                            {app.passportAudit && (
+                              <span className="text-[9px] bg-amber-500/10 text-amber-300 border border-amber-500/30 px-1 rounded font-mono" title={`OCR Score: ${app.passportAudit.overallScore}/100`}>
+                                OCR {app.passportAudit.overallScore}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[11px] text-slate-400">{app.nationality}</div>
+                        </div>
+                      </div>
+                    </td>
+
+                    <td className="px-4 py-3 font-mono font-medium">
+                      {app.passportNumber}
+                    </td>
+
+                    <td className="px-4 py-3 text-slate-300 max-w-xs truncate" title={app.visaType}>
+                      {app.visaType}
+                    </td>
+
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md font-medium text-[11px] ${
+                        app.status === 'Approved' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' :
+                        app.status === 'Audited - Passed' ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' :
+                        app.status === 'Audited - Flagged' ? 'bg-red-950 text-red-400 border border-red-800' :
+                        app.status === 'Submitted to GDRFA/ICP' ? 'bg-sky-950 text-sky-400 border border-sky-800' :
+                        'bg-slate-800 text-slate-300'
+                      }`}>
+                        {app.status === 'Audited - Passed' && <CheckCircle2 className="w-3 h-3" />}
+                        {app.status === 'Audited - Flagged' && <AlertTriangle className="w-3 h-3" />}
+                        {app.status === 'Submitted to GDRFA/ICP' && <Clock className="w-3 h-3" />}
+                        {app.status}
+                      </span>
+                    </td>
+
+                    <td className="px-4 py-3 text-slate-400 text-[11px]">
+                      {formatDate(app.updatedAt)}
+                    </td>
+
+                    <td className="px-4 py-3 text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          onClick={() => setSelectedDocHistoryApp(app)}
+                          title={`View document versions & audit history for ${app.applicantName}`}
+                          className="text-xs bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700/80 px-2.5 py-1 rounded transition-colors cursor-pointer flex items-center gap-1.5 font-medium"
+                        >
+                          <History className="w-3.5 h-3.5 text-amber-400" />
+                          <span>{language === 'ar' ? 'سجل الوثائق' : 'Doc History'}</span>
+                          <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30">
+                            {app.documentHistory && app.documentHistory.length > 0
+                              ? app.documentHistory.length
+                              : (app.passportAudit ? 1 : 0)}
+                          </span>
+                        </button>
+
+                        <button
+                          onClick={() => handleOpenTemplateManager(app)}
+                          title="Draft or copy message/cover letter from Template Manager"
+                          className="text-xs bg-slate-800 hover:bg-slate-700 text-sky-300 border border-slate-700/80 px-2 py-1 rounded transition-colors cursor-pointer flex items-center gap-1"
+                        >
+                          <FileText className="w-3 h-3 text-sky-400" />
+                          <span>Draft</span>
+                        </button>
+
+                        <button
+                          onClick={() => handleOpenFeeCalculator(app.visaType, app.nationality)}
+                          title="Calculate fee estimate for this application"
+                          className="text-xs bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700/80 px-2 py-1 rounded transition-colors cursor-pointer flex items-center gap-1"
+                        >
+                          <Coins className="w-3 h-3 text-amber-400" />
+                          <span>Fees</span>
+                        </button>
+
+                        <button
+                          id={`btn-open-audit-trail-${app.id}`}
+                          onClick={() => {
+                            setAuditTrailTargetAppId(app.id);
+                            setCrmViewTab('audit-trail');
+                          }}
+                          title={`View chronological audit trail for ${app.applicantName}`}
+                          className="text-xs bg-slate-800 hover:bg-slate-700 text-sky-300 border border-slate-700/80 px-2 py-1 rounded transition-colors cursor-pointer flex items-center gap-1 font-medium"
+                        >
+                          <History className="w-3.5 h-3.5 text-sky-400" />
+                          <span>Audit</span>
+                          <span className="text-[10px] font-mono px-1 py-0.2 rounded bg-sky-950 text-sky-300 border border-sky-800 font-bold">
+                            {app.auditTrail?.length || 0}
+                          </span>
+                        </button>
+
+                        <button
+                          id={`btn-open-qr-${app.id}`}
+                          onClick={() => setSelectedQrApp(app)}
+                          title={`Generate scannable QR Code linking to digital documents / status for ${app.applicantName}`}
+                          className="text-xs bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 px-2 py-1 rounded transition-colors cursor-pointer flex items-center gap-1 font-semibold"
+                        >
+                          <QrCode className="w-3.5 h-3.5 text-amber-400" />
+                          <span>QR</span>
+                        </button>
+
+                        <button
+                          id={`btn-export-pdf-audit-${app.id}`}
+                          onClick={() => handleExportApplicationAuditPdf(app)}
+                          disabled={generatingPdfAppId === app.id}
+                          title={`Export professional PDF dossier report for ${app.applicantName} containing passport data, status logs & audit history`}
+                          className="text-xs bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 px-2 py-1 rounded transition-colors cursor-pointer flex items-center gap-1 font-semibold disabled:opacity-50"
+                        >
+                          {generatingPdfAppId === app.id ? (
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin text-amber-400" />
+                          ) : (
+                            <FileDown className="w-3.5 h-3.5 text-amber-400" />
+                          )}
+                          <span>Dossier PDF</span>
+                        </button>
+
+                        {/* Share via WhatsApp Table Button */}
+                        <button
+                          id={`btn-whatsapp-dispatch-${app.id}`}
+                          onClick={() => handleOpenWhatsAppForApp(app)}
+                          title={`Send automated WhatsApp status update template directly to ${app.applicantName} (${app.contactPhone || 'Enter phone'})`}
+                          className="text-xs bg-emerald-950/80 hover:bg-emerald-900/90 text-emerald-300 border border-emerald-800/80 px-2.5 py-1 rounded transition-colors cursor-pointer flex items-center gap-1.5 font-semibold shadow-xs"
+                        >
+                          <MessageCircle className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>Share via WhatsApp</span>
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            setSelectedApp(app);
+                            setInspectModalTab('overview');
+                          }}
+                          className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 px-2.5 py-1 rounded transition-colors cursor-pointer"
+                        >
+                          Inspect
+                        </button>
+
+                        <button
+                          onClick={() => onSendEmailUpdate(app)}
+                          disabled={isSendingEmail}
+                          title={`Notify ${app.contactEmail} via Gmail`}
+                          className="text-xs bg-sky-950 hover:bg-sky-900 text-sky-300 border border-sky-800 px-2.5 py-1 rounded flex items-center gap-1 transition-colors cursor-pointer"
+                        >
+                          <Mail className="w-3 h-3" />
+                          Send Alert
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
     )}
 
@@ -754,9 +1241,23 @@ export const AgencyCrmDashboard: React.FC<AgencyCrmDashboardProps> = ({
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-800 rounded-xl max-w-2xl w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <div>
-                <span className="text-xs font-mono text-amber-400">File Reference: {selectedApp.id}</span>
-                <h3 className="text-lg font-bold text-white">{selectedApp.applicantName}</h3>
+              <div className="flex items-center gap-3">
+                {selectedApp.avatarUrl ? (
+                  <img 
+                    src={selectedApp.avatarUrl} 
+                    alt={selectedApp.applicantName} 
+                    referrerPolicy="no-referrer"
+                    className="w-12 h-12 rounded-full object-cover ring-2 ring-amber-500/50 shrink-0" 
+                  />
+                ) : (
+                  <div className="w-12 h-12 rounded-full bg-slate-800 text-amber-400 font-bold flex items-center justify-center text-base shrink-0 border border-slate-700">
+                    {selectedApp.applicantName.charAt(0)}
+                  </div>
+                )}
+                <div>
+                  <span className="text-xs font-mono text-amber-400">File Reference: {selectedApp.id}</span>
+                  <h3 className="text-lg font-bold text-white">{selectedApp.applicantName}</h3>
+                </div>
               </div>
               <button
                 onClick={() => setSelectedApp(null)}
@@ -992,6 +1493,43 @@ export const AgencyCrmDashboard: React.FC<AgencyCrmDashboardProps> = ({
                   <QrCode className="w-3.5 h-3.5 text-amber-400" />
                   <span>Mobile QR Code</span>
                 </button>
+
+                <button
+                  type="button"
+                  id="btn-modal-open-whatsapp"
+                  onClick={() => handleOpenWhatsAppForApp(selectedApp)}
+                  className="text-xs bg-emerald-950/90 hover:bg-emerald-900 text-emerald-300 border border-emerald-800 px-3 py-2 rounded-lg flex items-center gap-1.5 cursor-pointer transition-colors font-semibold shadow-xs"
+                >
+                  <MessageCircle className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Share via WhatsApp</span>
+                </button>
+
+                <button
+                  type="button"
+                  id="btn-modal-export-pdf-audit"
+                  onClick={() => handleExportApplicationAuditPdf(selectedApp)}
+                  disabled={generatingPdfAppId === selectedApp.id}
+                  className="text-xs bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 px-3.5 py-2 rounded-lg flex items-center gap-1.5 cursor-pointer transition-all font-bold shadow-md shadow-amber-500/20 disabled:opacity-50"
+                  title="Export official branded PDF dossier report containing passport data, status logs & audit history"
+                >
+                  {generatingPdfAppId === selectedApp.id ? (
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <FileDown className="w-3.5 h-3.5 text-slate-950" />
+                  )}
+                  <span>Export Dossier PDF</span>
+                </button>
+
+                <button
+                  type="button"
+                  id="btn-modal-customize-pdf-dossier"
+                  onClick={() => handleOpenDossierPdfModal(selectedApp)}
+                  className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-2.5 py-2 rounded-lg flex items-center gap-1 cursor-pointer transition-colors font-semibold"
+                  title="Configure and preview PDF dossier report options"
+                >
+                  <FileText className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Options</span>
+                </button>
               </div>
 
               <button
@@ -1117,17 +1655,34 @@ export const AgencyCrmDashboard: React.FC<AgencyCrmDashboardProps> = ({
                 <span className="text-xs text-slate-400">
                   Total recorded events: <strong className="text-slate-200">{selectedApp.auditTrail?.length || 0}</strong>
                 </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAuditTrailTargetAppId(selectedApp.id);
-                    setCrmViewTab('audit-trail');
-                    setSelectedApp(null);
-                  }}
-                  className="text-xs bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
-                >
-                  Open in Audit Trail Tab
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleExportApplicationAuditPdf(selectedApp)}
+                    disabled={generatingPdfAppId === selectedApp.id}
+                    className="text-xs bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-3 py-1.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 shadow-xs disabled:opacity-50"
+                    title="Export printable PDF dossier report containing passport data, status logs & audit history"
+                  >
+                    {generatingPdfAppId === selectedApp.id ? (
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <FileDown className="w-3.5 h-3.5" />
+                    )}
+                    <span>Print / Export Dossier PDF</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuditTrailTargetAppId(selectedApp.id);
+                      setCrmViewTab('audit-trail');
+                      setSelectedApp(null);
+                    }}
+                    className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold px-3 py-1.5 rounded-lg transition-colors cursor-pointer border border-slate-700"
+                  >
+                    Open in Audit Trail Tab
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -1345,6 +1900,7 @@ export const AgencyCrmDashboard: React.FC<AgencyCrmDashboardProps> = ({
           application={selectedDocHistoryApp}
           isOpen={!!selectedDocHistoryApp}
           onClose={() => setSelectedDocHistoryApp(null)}
+          onOpenQrScanner={() => setShowQrScannerModal(true)}
           onUpdateApplicationDocuments={(id, docs) => {
             if (onUpdateApplicationDocuments) {
               onUpdateApplicationDocuments(id, docs);
@@ -1377,6 +1933,65 @@ export const AgencyCrmDashboard: React.FC<AgencyCrmDashboardProps> = ({
           onOpenDossier={(app) => {
             setSelectedApp(app);
             setInspectModalTab('overview');
+          }}
+        />
+      )}
+
+      {/* PWABuilder Store Package & Audit Modal */}
+      {showPWABuilder && (
+        <PWABuilderModal
+          isOpen={showPWABuilder}
+          onClose={() => setShowPWABuilder(false)}
+        />
+      )}
+
+      {/* WhatsApp Client Visa Status Update & Audit Report Share Modal */}
+      <WhatsAppShareModal
+        isOpen={showWhatsAppModal}
+        onClose={() => {
+          setShowWhatsAppModal(false);
+          setWhatsAppPayload(null);
+          setWhatsAppTargetApp(null);
+        }}
+        payload={whatsAppPayload}
+        initialTemplateId={whatsAppInitialTemplate}
+        onLogAuditTrail={handleLogWhatsAppAuditTrail}
+      />
+
+      {/* Official Application Dossier PDF Report Export Modal */}
+      {showDossierPdfModal && (
+        <ApplicationDossierPdfModal
+          isOpen={showDossierPdfModal}
+          onClose={() => {
+            setShowDossierPdfModal(false);
+            setDossierPdfApp(null);
+          }}
+          applications={applications}
+          initialApplication={dossierPdfApp}
+        />
+      )}
+
+      {/* Live Camera QR Code Scanner & Physical Document Linker Modal */}
+      {showQrScannerModal && (
+        <CameraQrScannerModal
+          isOpen={showQrScannerModal}
+          onClose={() => setShowQrScannerModal(false)}
+          applications={applications}
+          onLinkDocumentToApplication={handleLinkPhysicalDocument}
+          onSelectApplicationDossier={(app) => {
+            setSelectedApp(app);
+            setInspectModalTab('overview');
+          }}
+          onOpenDocumentHistory={(app) => {
+            setSelectedDocHistoryApp(app);
+          }}
+          onExportDossierPdf={(app) => {
+            handleOpenDossierPdfModal(app);
+          }}
+          onAddNewApplicationWithPrefill={(prefill) => {
+            if (prefill.passportNumber) setNewPassport(prefill.passportNumber);
+            if (prefill.notes) setNewNotes(prefill.notes);
+            setShowNewModal(true);
           }}
         />
       )}

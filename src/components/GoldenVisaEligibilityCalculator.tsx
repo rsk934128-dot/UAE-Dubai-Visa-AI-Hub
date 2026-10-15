@@ -14,6 +14,7 @@ import {
   FileCheck2
 } from 'lucide-react';
 import { GOLDEN_VISA_CATEGORIES, UAE_VISA_CATEGORIES } from '../data';
+import goldenVisaCardImg from '../assets/images/golden_visa_card_1789926674279.jpg';
 
 export const GoldenVisaEligibilityCalculator: React.FC = () => {
   const [nationality, setNationality] = useState('Bangladeshi');
@@ -59,18 +60,49 @@ export const GoldenVisaEligibilityCalculator: React.FC = () => {
 
   return (
     <div className="space-y-6" id="golden-visa-hub">
-      {/* Top Banner */}
-      <div className="bg-gradient-to-r from-amber-950/40 via-slate-900 to-slate-900 border border-amber-500/20 rounded-xl p-5 backdrop-blur-md">
-        <div className="flex items-center gap-2 text-amber-400 font-semibold tracking-wide text-xs uppercase mb-1">
-          <Award className="w-4 h-4" />
-          UAE Golden &amp; Green Visa Intelligence Engine
+      {/* Top Banner with Luxury Card Visual */}
+      <div className="bg-gradient-to-r from-amber-950/50 via-slate-900 to-slate-900 border border-amber-500/30 rounded-2xl p-5 sm:p-6 backdrop-blur-md relative overflow-hidden shadow-lg">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+          <div className="space-y-2 max-w-2xl">
+            <div className="flex items-center gap-2 text-amber-400 font-semibold tracking-wide text-xs uppercase">
+              <Award className="w-4 h-4 text-amber-400" />
+              UAE Golden &amp; Green Visa Intelligence Engine
+            </div>
+            <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
+              Golden Visa (10-Year) &amp; Freelance Green Visa Eligibility Analyzer
+            </h2>
+            <p className="text-slate-400 text-xs sm:text-sm leading-relaxed">
+              Evaluate salary thresholds (AED 30k+), developer/AI endorsements (Coders HQ), real estate property portfolios (AED 2M+), and startup founder qualifications. Self-sponsored residency with 100% foreign business ownership.
+            </p>
+            <div className="flex flex-wrap gap-2 pt-1">
+              <span className="text-[11px] px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/30 font-medium">
+                ★ 10-Year Renewable
+              </span>
+              <span className="text-[11px] px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 font-medium">
+                ✓ No Local Sponsor Required
+              </span>
+              <span className="text-[11px] px-2.5 py-1 rounded-full bg-sky-500/10 text-sky-300 border border-sky-500/30 font-medium">
+                ✓ 100% Family &amp; Domestic Staff Sponsorship
+              </span>
+            </div>
+          </div>
+
+          <div className="w-full md:w-56 shrink-0 relative group">
+            <div className="relative rounded-xl overflow-hidden border border-amber-500/40 shadow-xl shadow-amber-500/10 transition-transform duration-300 group-hover:scale-105">
+              <img 
+                src={goldenVisaCardImg} 
+                alt="UAE 10-Year Golden Visa Card" 
+                referrerPolicy="no-referrer"
+                className="w-full h-36 sm:h-40 object-cover" 
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent" />
+              <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between text-[10px] font-bold text-amber-300 px-2 py-1 rounded bg-slate-950/80 backdrop-blur-xs border border-amber-500/30">
+                <span>UAE GOLDEN VISA</span>
+                <span className="font-mono">10 YEARS</span>
+              </div>
+            </div>
+          </div>
         </div>
-        <h2 className="text-xl font-bold text-white tracking-tight">
-          Golden Visa (10-Year) &amp; Freelance Green Visa Eligibility Analyzer
-        </h2>
-        <p className="text-slate-400 text-sm mt-1 max-w-3xl">
-          Evaluate salary thresholds (AED 30k+), developer/AI endorsements (Coders HQ), real estate property portfolios (AED 2M+), and startup founder qualifications.
-        </p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">

@@ -25,24 +25,29 @@ import {
   Tag, 
   Trash2,
   X,
-  Printer
+  Printer,
+  FileDown,
+  RefreshCw
 } from 'lucide-react';
 import { VisaApplication, DocumentAuditHistoryItem, DocumentAuditType, DocumentAuditStatus } from '../types';
 import { formatDate } from '../lib/utils';
 import { useLanguage } from '../context/LanguageContext';
+import { generateApplicationAuditTrailPdf } from '../lib/auditTrailPdfGenerator';
 
 interface DocumentHistoryModalProps {
   application: VisaApplication;
   isOpen: boolean;
   onClose: () => void;
   onUpdateApplicationDocuments?: (applicationId: string, updatedDocs: DocumentAuditHistoryItem[]) => void;
+  onOpenQrScanner?: () => void;
 }
 
 export const DocumentHistoryModal: React.FC<DocumentHistoryModalProps> = ({
   application,
   isOpen,
   onClose,
-  onUpdateApplicationDocuments
+  onUpdateApplicationDocuments,
+  onOpenQrScanner
 }) => {
   const { language, isRTL } = useLanguage();
   const [activeTab, setActiveTab] = useState<'timeline' | 'compare' | 'upload' | 'export'>('timeline');
@@ -53,6 +58,23 @@ export const DocumentHistoryModal: React.FC<DocumentHistoryModalProps> = ({
   // Side-by-side compare state
   const [compareLeftId, setCompareLeftId] = useState<string>('');
   const [compareRightId, setCompareRightId] = useState<string>('');
+  const [generatingPdf, setGeneratingPdf] = useState(false);
+
+  const handleExportPdf = async () => {
+    try {
+      setGeneratingPdf(true);
+      await generateApplicationAuditTrailPdf({
+        application,
+        agencyName: 'UAE & Dubai Visa AI Hub',
+        consultantName: application.assignedAgent || 'Immigration Processing Officer'
+      });
+    } catch (err) {
+      console.error('Failed to generate audit PDF from DocumentHistoryModal:', err);
+      alert('Could not export PDF audit trail. Please try again.');
+    } finally {
+      setGeneratingPdf(false);
+    }
+  };
 
   // Upload/Attach form state
   const [newDocType, setNewDocType] = useState<DocumentAuditType>('Passport OCR');
@@ -289,6 +311,19 @@ export const DocumentHistoryModal: React.FC<DocumentHistoryModalProps> = ({
               <Printer className="w-3.5 h-3.5" />
               <span>{language === 'ar' ? 'تقرير التدقيق الرسمي' : 'Export Audit Dossier'}</span>
             </button>
+
+            {onOpenQrScanner && (
+              <button
+                id="btn-doc-history-scan-qr"
+                type="button"
+                onClick={onOpenQrScanner}
+                className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/35"
+                title="Scan physical document QR code using camera to link"
+              >
+                <Scan className="w-3.5 h-3.5 text-emerald-400" />
+                <span>{language === 'ar' ? 'مسح رمز وثيقة بالكاميرا' : 'Scan Physical QR'}</span>
+              </button>
+            )}
           </div>
 
           <div className="hidden sm:flex items-center gap-2 text-[11px] text-slate-400 font-mono">
@@ -876,14 +911,30 @@ export const DocumentHistoryModal: React.FC<DocumentHistoryModalProps> = ({
                   </p>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => window.print()}
-                  className="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-700 flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Printer className="w-3.5 h-3.5 text-amber-400" />
-                  <span>{language === 'ar' ? 'طباعة التقرير' : 'Print Report'}</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleExportPdf}
+                    disabled={generatingPdf}
+                    className="bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 cursor-pointer shadow-md shadow-amber-500/20 disabled:opacity-50 transition-all"
+                  >
+                    {generatingPdf ? (
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <FileDown className="w-3.5 h-3.5" />
+                    )}
+                    <span>{language === 'ar' ? 'تصدير ملف الدوسيه PDF' : 'Export Dossier PDF'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => window.print()}
+                    className="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-700 flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Printer className="w-3.5 h-3.5 text-slate-300" />
+                    <span>{language === 'ar' ? 'طباعة التقرير' : 'Print'}</span>
+                  </button>
+                </div>
               </div>
 
               {/* Summary Table */}

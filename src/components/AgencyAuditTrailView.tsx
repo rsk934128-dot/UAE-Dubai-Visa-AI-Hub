@@ -23,11 +23,15 @@ import {
   Sparkles,
   Tag,
   Calendar,
-  X
+  X,
+  FileDown,
+  Printer,
+  RefreshCw
 } from 'lucide-react';
 import { VisaApplication, ApplicationAuditEvent, AuditEventType, DocumentAuditHistoryItem } from '../types';
-import { formatDate } from '../lib/utils';
 import { useLanguage } from '../context/LanguageContext';
+import { formatDate } from '../lib/utils';
+import { generateApplicationDossierPdf } from '../lib/applicationDossierPdfGenerator';
 
 interface AgencyAuditTrailViewProps {
   applications: VisaApplication[];
@@ -54,6 +58,7 @@ export const AgencyAuditTrailView: React.FC<AgencyAuditTrailViewProps> = ({
   const [selectedAppFilter, setSelectedAppFilter] = useState<string>(selectedApplicationId || 'ALL');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [showAddNoteModal, setShowAddNoteModal] = useState(false);
+  const [generatingPdfAppId, setGeneratingPdfAppId] = useState<string | null>(null);
 
   // New Note Modal State
   const [targetAppId, setTargetAppId] = useState<string>(
@@ -196,6 +201,41 @@ Details: ${JSON.stringify(evt.details, null, 2)}`;
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
     downloadAnchor.remove();
+  };
+
+  // Export Complete Application Dossier PDF Report (Passport Data, Status Logs & Audit History)
+  const handleExportAuditTrailPdf = async (targetApp?: VisaApplication) => {
+    const appToExport = targetApp || (selectedAppFilter !== 'ALL' 
+      ? applications.find(a => a.id === selectedAppFilter) 
+      : applications[0]);
+
+    if (!appToExport) {
+      alert('Please select a specific visa application to generate the dossier PDF report.');
+      return;
+    }
+
+    try {
+      setGeneratingPdfAppId(appToExport.id);
+      // Filter events specifically for this application if in filtered mode, otherwise pass full list for app
+      const appEvents = filteredEvents.filter(e => e.applicationId === appToExport.id);
+
+      await generateApplicationDossierPdf({
+        application: appToExport,
+        events: appEvents.length > 0 ? appEvents : undefined,
+        agencyName: 'UAE & Dubai Visa AI Hub',
+        consultantName: appToExport.assignedAgent || 'Senior Immigration Desk Officer',
+        includePassportData: true,
+        includeStatusLogs: true,
+        includeAuditTrail: true,
+        includeDocumentHistory: true,
+        includeQrCode: true
+      });
+    } catch (err) {
+      console.error('Failed to generate dossier PDF report:', err);
+      alert('Failed to generate dossier PDF report. Please check your browser print settings.');
+    } finally {
+      setGeneratingPdfAppId(null);
+    }
   };
 
   const handleSaveNote = (e: React.FormEvent) => {
@@ -390,6 +430,21 @@ Details: ${JSON.stringify(evt.details, null, 2)}`;
         <div className="flex items-center gap-2 shrink-0">
           <button
             type="button"
+            onClick={() => handleExportAuditTrailPdf()}
+            disabled={generatingPdfAppId !== null}
+            className="bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 text-xs font-bold px-3.5 py-2 rounded-lg flex items-center gap-1.5 cursor-pointer transition-all shadow-md shadow-amber-500/20 disabled:opacity-50"
+            title="Download executive PDF dossier report containing passport data, status logs & audit trail for client handover"
+          >
+            {generatingPdfAppId ? (
+              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <FileDown className="w-3.5 h-3.5 text-slate-950" />
+            )}
+            <span>{generatingPdfAppId ? 'Building Dossier PDF...' : 'Export Dossier PDF Report'}</span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => setShowAddNoteModal(true)}
             className="bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 text-xs font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 cursor-pointer transition-colors"
             title="Add a manual audit log or compliance note"
@@ -405,7 +460,7 @@ Details: ${JSON.stringify(evt.details, null, 2)}`;
             title="Download audit trail as JSON"
           >
             <Download className="w-3.5 h-3.5 text-slate-400" />
-            <span>Export Log</span>
+            <span>JSON</span>
           </button>
         </div>
       </div>
@@ -649,6 +704,21 @@ Details: ${JSON.stringify(evt.details, null, 2)}`;
                     </span>
 
                     <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => handleExportAuditTrailPdf(parentApp)}
+                        disabled={generatingPdfAppId === parentApp.id}
+                        className="text-xs bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2.5 py-1 rounded transition-colors cursor-pointer flex items-center gap-1 disabled:opacity-50"
+                        title="Download printable PDF audit trail for this applicant"
+                      >
+                        {generatingPdfAppId === parentApp.id ? (
+                          <RefreshCw className="w-3 h-3 animate-spin text-amber-400" />
+                        ) : (
+                          <FileDown className="w-3 h-3 text-amber-400" />
+                        )}
+                        <span>PDF Trail</span>
+                      </button>
+
                       <button
                         type="button"
                         onClick={() => onOpenDocHistory(parentApp)}

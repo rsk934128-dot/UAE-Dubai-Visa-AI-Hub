@@ -2,13 +2,27 @@
   "name": "UAE & Dubai Visa AI Hub",
   "short_name": "UAE Visa AI",
   "id": "/",
+  "start_url": "/",
   "scope": "/",
   "description": "AI-powered UAE & Dubai visa document auditor, passport OCR analyzer, photo validator, eligibility calculator, and agency management platform.",
-  "start_url": "/",
   "display": "standalone",
+  "display_override": [
+    "window-controls-overlay",
+    "standalone",
+    "minimal-ui"
+  ],
   "background_color": "#020617",
   "theme_color": "#0284c7",
   "orientation": "portrait-primary",
+  "lang": "en",
+  "dir": "ltr",
+  "prefer_related_applications": false,
+  "categories": [
+    "business",
+    "travel",
+    "productivity",
+    "utilities"
+  ],
   "icons": [
     {
       "src": "/favicon.svg",
@@ -41,5 +55,84 @@
       "purpose": "any"
     }
   ],
-  "categories": ["business", "travel", "productivity", "utilities"]
+  "screenshots": [
+    {
+      "src": "/screenshots/screenshot-desktop.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "UAE Visa AI Hub Agency CRM & Passport OCR Auditor (Desktop)"
+    },
+    {
+      "src": "/screenshots/screenshot-mobile.png",
+      "sizes": "750x1334",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Mobile Visa Application Tracker & AI Passport Scanner"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Passport OCR Audit",
+      "short_name": "Audit",
+      "description": "Instant ICAO 9303 MRZ scanner & photo compliance validator",
+      "url": "/?tab=passport-scanner",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Agency CRM",
+      "short_name": "CRM",
+      "description": "Manage UAE visa applicant dossiers, files, and status updates",
+      "url": "/?tab=agency-crm",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Track Application",
+      "short_name": "Tracking",
+      "description": "GDRFA Dubai and ICP Federal portal status verification",
+      "url": "/?tab=tracking-portal",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Golden Visa",
+      "short_name": "Golden",
+      "description": "10-year UAE Golden Visa AI eligibility assessment",
+      "url": "/?tab=golden-visa",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
+  ],
+  "share_target": {
+    "action": "/?action=share-target",
+    "method": "GET",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  },
+  "handle_links": "preferred"
 }

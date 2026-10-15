@@ -1,12 +1,15 @@
-// UAE & Dubai Visa AI Hub - Service Worker with Background Sync & Real-Time Notifications
-const CACHE_NAME = 'uae-visa-ai-v1';
+// UAE & Dubai Visa AI Hub - Service Worker with Background Sync, Offline Caching & Real-Time Notifications
+const CACHE_NAME = 'uae-visa-ai-v2';
 const PRECACHE_ASSETS = [
   '/',
   '/index.html',
+  '/offline.html',
   '/favicon.svg',
   '/manifest.json',
   '/icon-192.png',
-  '/icon-512.png'
+  '/icon-512.png',
+  '/icon-maskable-512.png',
+  '/apple-touch-icon.png'
 ];
 
 // Install: Precache shell and activate immediately
@@ -170,4 +173,56 @@ self.addEventListener('sync', (event) => {
       })
     );
   }
+});
+
+// Fetch Handler: Network-first for dynamic content with cache fallback & offline fallback
+self.addEventListener('fetch', (event) => {
+  const req = event.request;
+
+  // Only handle GET requests and http/https schemes
+  if (req.method !== 'GET' || !req.url.startsWith('http')) {
+    return;
+  }
+
+  // Handle navigation requests (pages)
+  if (req.mode === 'navigate') {
+    event.respondWith(
+      fetch(req)
+        .then((response) => {
+          if (response && response.status === 200) {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(req, copy));
+          }
+          return response;
+        })
+        .catch(() => {
+          return caches.match(req).then((cached) => {
+            return cached || caches.match('/index.html') || caches.match('/offline.html');
+          });
+        })
+    );
+    return;
+  }
+
+  // Handle static assets & images (Stale-While-Revalidate)
+  event.respondWith(
+    caches.match(req).then((cachedResponse) => {
+      const fetchPromise = fetch(req)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
+            const responseToCache = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(req, responseToCache));
+          }
+          return networkResponse;
+        })
+        .catch(() => {
+          // Fallback if both cache and network fail for image
+          if (req.destination === 'image') {
+            return caches.match('/favicon.svg');
+          }
+        });
+
+      return cachedResponse || fetchPromise;
+    })
+  );
 });

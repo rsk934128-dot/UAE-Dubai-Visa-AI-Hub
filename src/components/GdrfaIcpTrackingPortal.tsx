@@ -12,6 +12,7 @@ import {
   Layers
 } from 'lucide-react';
 import { TrackingResult } from '../types';
+import dubaiEgateTrackerImg from '../assets/images/dubai_egate_tracker_1789926700236.jpg';
 
 export const GdrfaIcpTrackingPortal: React.FC = () => {
   const [portal, setPortal] = useState<'GDRFA' | 'ICP'>('GDRFA');
@@ -61,18 +62,49 @@ export const GdrfaIcpTrackingPortal: React.FC = () => {
 
   return (
     <div className="space-y-6" id="tracking-portal-container">
-      {/* Top Banner */}
-      <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-5 backdrop-blur-md">
-        <div className="flex items-center gap-2 text-sky-400 font-semibold tracking-wide text-xs uppercase mb-1">
-          <Globe2 className="w-4 h-4" />
-          Official UAE Government Smart Services Gateway
+      {/* Top Banner with Smart Gates Visual */}
+      <div className="bg-gradient-to-r from-slate-900 via-slate-900 to-sky-950/40 border border-sky-500/20 rounded-2xl p-5 sm:p-6 backdrop-blur-md relative overflow-hidden shadow-lg">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+          <div className="space-y-2 max-w-2xl">
+            <div className="flex items-center gap-2 text-sky-400 font-semibold tracking-wide text-xs uppercase">
+              <Globe2 className="w-4 h-4 text-sky-400" />
+              Official UAE Government Smart Services Gateway
+            </div>
+            <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
+              GDRFA Dubai &amp; ICP Federal Visa Status Tracker
+            </h2>
+            <p className="text-slate-400 text-xs sm:text-sm leading-relaxed">
+              Direct API tracking interface for Dubai GDRFA (General Directorate of Residency and Foreigners Affairs) and ICP (Federal Authority for Identity, Citizenship, Customs and Port Security). Live sync with UAE Smart Gates and airport immigration databases.
+            </p>
+            <div className="flex flex-wrap gap-2 pt-1">
+              <span className="text-[11px] px-2.5 py-1 rounded-full bg-sky-500/10 text-sky-300 border border-sky-500/30 font-medium">
+                ✓ Dubai GDRFA Smart Channels
+              </span>
+              <span className="text-[11px] px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/30 font-medium">
+                ✓ Federal ICP (Abu Dhabi, Sharjah, Ajman)
+              </span>
+              <span className="text-[11px] px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 font-medium">
+                ✓ Live e-Gate Clearance Validation
+              </span>
+            </div>
+          </div>
+
+          <div className="w-full md:w-56 shrink-0">
+            <div className="relative rounded-xl overflow-hidden border border-sky-500/30 shadow-md">
+              <img 
+                src={dubaiEgateTrackerImg} 
+                alt="Dubai Smart Gate & ICP Tracking System" 
+                referrerPolicy="no-referrer"
+                className="w-full h-32 sm:h-36 object-cover" 
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent" />
+              <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between text-[10px] text-sky-300 font-mono font-bold px-2 py-0.5 rounded bg-slate-950/80 backdrop-blur-xs border border-sky-500/30">
+                <span>GDRFA SMART PASS</span>
+                <span className="text-emerald-400">ONLINE</span>
+              </div>
+            </div>
+          </div>
         </div>
-        <h2 className="text-xl font-bold text-white tracking-tight">
-          GDRFA Dubai &amp; ICP Federal Visa Status Tracker
-        </h2>
-        <p className="text-slate-400 text-sm mt-1 max-w-3xl">
-          Direct API tracking interface for Dubai GDRFA (General Directorate of Residency and Foreigners Affairs) and ICP (Federal Authority for Identity, Citizenship, Customs and Port Security).
-        </p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">

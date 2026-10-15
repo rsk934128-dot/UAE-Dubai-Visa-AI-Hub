@@ -235,12 +235,77 @@ export const PhotoSpecificationAuditor: React.FC<PhotoSpecificationAuditorProps>
               )}
 
               {!selectedPhoto && !auditResult && !analyzing && (
-                <div className="bg-slate-900/40 border border-slate-800/60 rounded-xl p-12 text-center flex flex-col items-center justify-center text-slate-500 h-full min-h-[350px]">
-                  <Camera className="w-12 h-12 text-slate-700 mb-3" />
-                  <h3 className="text-slate-300 font-medium text-base mb-1">Awaiting Applicant Photo</h3>
-                  <p className="text-xs text-slate-500 max-w-xs">
-                    Upload a portrait or click a sample to verify 40x55mm dimensions, background luminance, and facial centering.
-                  </p>
+                <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 text-center flex flex-col items-center justify-center text-slate-400 space-y-6 min-h-[350px]">
+                  <div className="space-y-1 text-center">
+                    <h3 className="text-slate-200 font-bold text-base">UAE GDRFA / ICP Photo Standards Reference</h3>
+                    <p className="text-xs text-slate-400 max-w-md mx-auto">
+                      All UAE entry permits require strict biometric compliance: 40x55mm dimension, pure white background RGB(255,255,255), and 70–80% facial framing.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full max-w-md text-left">
+                    {/* Compliant Visual Card */}
+                    <div 
+                      onClick={async () => {
+                        setSelectedPhoto(DUMMY_PHOTO_SAMPLES[0].dataUrl);
+                        const raster = await ensureRasterBase64(DUMMY_PHOTO_SAMPLES[0].dataUrl);
+                        runPhotoAudit(raster.base64, raster.mimeType);
+                      }}
+                      className="group bg-slate-950/80 border border-emerald-500/30 hover:border-emerald-500/60 rounded-xl p-3 cursor-pointer transition-all hover:scale-[1.02] shadow-sm"
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3" />
+                          Compliant
+                        </span>
+                        <span className="text-[9px] font-mono text-slate-500">Click to test</span>
+                      </div>
+                      <div className="w-full h-36 rounded-lg overflow-hidden bg-white flex items-center justify-center border border-emerald-500/20 mb-2">
+                        <img 
+                          src={DUMMY_PHOTO_SAMPLES[0].dataUrl} 
+                          alt="Compliant sample" 
+                          referrerPolicy="no-referrer"
+                          className="w-full h-full object-contain" 
+                        />
+                      </div>
+                      <ul className="text-[10px] text-slate-400 space-y-0.5">
+                        <li className="text-emerald-300">✓ Pure white background</li>
+                        <li className="text-emerald-300">✓ 80% face coverage ratio</li>
+                        <li className="text-emerald-300">✓ Centered neutral pose</li>
+                      </ul>
+                    </div>
+
+                    {/* Non-compliant Visual Card */}
+                    <div 
+                      onClick={async () => {
+                        setSelectedPhoto(DUMMY_PHOTO_SAMPLES[1].dataUrl);
+                        const raster = await ensureRasterBase64(DUMMY_PHOTO_SAMPLES[1].dataUrl);
+                        runPhotoAudit(raster.base64, raster.mimeType);
+                      }}
+                      className="group bg-slate-950/80 border border-red-500/30 hover:border-red-500/60 rounded-xl p-3 cursor-pointer transition-all hover:scale-[1.02] shadow-sm"
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-[10px] font-bold text-red-400 uppercase tracking-wider flex items-center gap-1">
+                          <XCircle className="w-3 h-3" />
+                          Rejected Sample
+                        </span>
+                        <span className="text-[9px] font-mono text-slate-500">Click to test</span>
+                      </div>
+                      <div className="w-full h-36 rounded-lg overflow-hidden bg-slate-800 flex items-center justify-center border border-red-500/20 mb-2">
+                        <img 
+                          src={DUMMY_PHOTO_SAMPLES[1].dataUrl} 
+                          alt="Non-compliant sample" 
+                          referrerPolicy="no-referrer"
+                          className="w-full h-full object-contain opacity-80" 
+                        />
+                      </div>
+                      <ul className="text-[10px] text-slate-400 space-y-0.5">
+                        <li className="text-red-300">✗ Dark / shadowed background</li>
+                        <li className="text-red-300">✗ Off-center face orientation</li>
+                        <li className="text-red-300">✗ Non-standard dimensions</li>
+                      </ul>
+                    </div>
+                  </div>
                 </div>
               )}
 

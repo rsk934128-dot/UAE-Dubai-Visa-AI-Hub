@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.uaevisa.aihub",
+      "sha256_cert_fingerprints": [
+        "14:6D:E9:7D:0F:52:AB:74:44:0E:9B:4C:E6:3C:99:9B:6C:54:19:92:4B:B5:12:17:28:C2:2C:9A:8E:73:9C:F7"
+      ]
+    }
+  }
+]

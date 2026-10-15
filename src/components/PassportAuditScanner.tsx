@@ -29,7 +29,8 @@ import {
   ArrowRight,
   Download,
   FileDown,
-  Printer
+  Printer,
+  MessageCircle
 } from 'lucide-react';
 import { PassportAuditResult, SavedPassportAudit } from '../types';
 import { DUMMY_PASSPORT_SAMPLES, convertFileToBase64, ensureRasterBase64, formatDate } from '../lib/utils';
@@ -40,6 +41,9 @@ import { generatePassportAuditPdf } from '../lib/pdfReportGenerator';
 import { PassportQrVerificationCard } from './PassportQrVerificationCard';
 import { VisualAuditSummary } from './VisualAuditSummary';
 import { BatchPassportAuditSection } from './BatchPassportAuditSection';
+import { WhatsAppShareModal } from './WhatsAppShareModal';
+import { WhatsAppAuditPayload, getWhatsAppPayloadFromAuditResult } from '../utils/whatsappUtils';
+import passportScanImg from '../assets/images/passport_scan_ai_1789926686696.jpg';
 
 const STORAGE_KEY = 'uae_visa_passport_audit_history';
 
@@ -67,6 +71,8 @@ export const PassportAuditScanner: React.FC<PassportAuditScannerProps> = ({
   const [historySearch, setHistorySearch] = useState('');
   const [historyFilter, setHistoryFilter] = useState<'all' | 'passed' | 'flagged'>('all');
   const [generatingPdf, setGeneratingPdf] = useState(false);
+  const [whatsAppPayload, setWhatsAppPayload] = useState<WhatsAppAuditPayload | null>(null);
+  const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
 
   // Load history from localStorage + cloud on mount and when user auth changes
   useEffect(() => {
@@ -296,56 +302,75 @@ export const PassportAuditScanner: React.FC<PassportAuditScannerProps> = ({
 
   return (
     <div className="space-y-6" id="passport-audit-container">
-      {/* Top Banner with Rules Checklist */}
-      <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-5 backdrop-blur-md">
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 text-amber-400 font-semibold tracking-wide text-xs uppercase mb-1">
-              <ShieldCheck className="w-4 h-4" />
+      {/* Top Banner with Rules Checklist & Scan Visual */}
+      <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 sm:p-6 backdrop-blur-md overflow-hidden relative shadow-lg">
+        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
+          <div className="space-y-2 max-w-2xl">
+            <div className="flex items-center gap-2 text-amber-400 font-semibold tracking-wide text-xs uppercase">
+              <ShieldCheck className="w-4 h-4 text-amber-400" />
               {language === 'ar' ? 'محرك مطابقة إقامة دبي والهيئة الاتحادية' : 'GDRFA & ICP Dubai Visa Compliance Engine'}
             </div>
-            <h2 className="text-xl font-bold text-white tracking-tight">
+            <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
               {language === 'ar' ? 'تدقيق الجوازات بالذكاء الاصطناعي وقاعدة الـ 6 أشهر' : 'AI Passport OCR & 6-Month Rule Validator'}
             </h2>
-            <p className="text-slate-400 text-sm mt-1 max-w-2xl">
+            <p className="text-slate-400 text-xs sm:text-sm leading-relaxed">
               {language === 'ar' 
                 ? 'ارفع صفحة البيانات الشخصية للجواز. يقوم النظام باستخراج البيانات وفحص مطابقة شريط MRZ والتحقق من سريان الجواز لأكثر من 180 يوماً قبل دفع الرسوم.' 
                 : 'Upload passport bio-data pages. Gemini analyzes visual fields, decodes MRZ checksums, and flags insufficient validity periods before visa fee payments.'}
             </p>
-          </div>
-          
-          {/* Quick sample loader & history buttons */}
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              id="btn-sample-valid-passport"
-              onClick={() => loadSample(DUMMY_PASSPORT_SAMPLES[0])}
-              className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
-            >
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-              {language === 'ar' ? 'جواز ساري المفعول (تجربة)' : 'Test Valid Sample'}
-            </button>
-            <button
-              id="btn-sample-expired-passport"
-              onClick={() => loadSample(DUMMY_PASSPORT_SAMPLES[1])}
-              className="text-xs bg-red-950/40 hover:bg-red-900/50 text-red-300 border border-red-800/60 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
-            >
-              <AlertTriangle className="w-3.5 h-3.5 text-red-400" />
-              {language === 'ar' ? 'جواز مخالف (<6 أشهر)' : 'Test Flagged (<6 Mo)'}
-            </button>
-
-            {savedAudits.length > 0 && (
+            
+            {/* Quick sample loader & history buttons */}
+            <div className="flex flex-wrap items-center gap-2 pt-2">
               <button
-                id="btn-scroll-to-history"
-                onClick={() => {
-                  const el = document.getElementById('recent-audits-section');
-                  if (el) el.scrollIntoView({ behavior: 'smooth' });
-                }}
-                className="text-xs bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer font-medium"
+                id="btn-sample-valid-passport"
+                onClick={() => loadSample(DUMMY_PASSPORT_SAMPLES[0])}
+                className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
               >
-                <History className="w-3.5 h-3.5 text-amber-400" />
-                History ({savedAudits.length})
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                {language === 'ar' ? 'جواز ساري المفعول (تجربة)' : 'Test Valid Sample'}
               </button>
-            )}
+              <button
+                id="btn-sample-expired-passport"
+                onClick={() => loadSample(DUMMY_PASSPORT_SAMPLES[1])}
+                className="text-xs bg-red-950/40 hover:bg-red-900/50 text-red-300 border border-red-800/60 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
+              >
+                <AlertTriangle className="w-3.5 h-3.5 text-red-400" />
+                {language === 'ar' ? 'جواز مخالف (<6 أشهر)' : 'Test Flagged (<6 Mo)'}
+              </button>
+
+              {savedAudits.length > 0 && (
+                <button
+                  id="btn-scroll-to-history"
+                  onClick={() => {
+                    const el = document.getElementById('recent-audits-section');
+                    if (el) el.scrollIntoView({ behavior: 'smooth' });
+                  }}
+                  className="text-xs bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer font-medium"
+                >
+                  <History className="w-3.5 h-3.5 text-amber-400" />
+                  History ({savedAudits.length})
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="w-full lg:w-64 shrink-0">
+            <div className="relative rounded-xl overflow-hidden border border-slate-700 shadow-md">
+              <img 
+                src={passportScanImg} 
+                alt="ICAO Biometric Laser Inspection" 
+                referrerPolicy="no-referrer"
+                className="w-full h-28 sm:h-32 object-cover" 
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent" />
+              <div className="absolute bottom-1.5 left-2 right-2 flex items-center justify-between text-[10px] text-amber-300 font-mono font-bold px-1.5 py-0.5 rounded bg-slate-950/80 backdrop-blur-xs border border-amber-500/20">
+                <span className="flex items-center gap-1">
+                  <Scan className="w-3 h-3 text-amber-400" />
+                  ICAO Doc 9303
+                </span>
+                <span className="text-emerald-400">MRZ Validated</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -608,7 +633,26 @@ export const PassportAuditScanner: React.FC<PassportAuditScannerProps> = ({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <button
+                    id="btn-whatsapp-audit-top"
+                    onClick={() => {
+                      const payload = getWhatsAppPayloadFromAuditResult(
+                        auditResult,
+                        undefined,
+                        userProfile?.agencyName || userProfile?.displayName
+                      );
+                      setWhatsAppPayload(payload);
+                      setShowWhatsAppModal(true);
+                    }}
+                    className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 cursor-pointer shadow-md shadow-emerald-500/20 transition-all active:scale-95 whitespace-nowrap"
+                    title="Send instant WhatsApp report to client"
+                  >
+                    <MessageCircle className="w-3.5 h-3.5 text-slate-950 fill-slate-950" />
+                    <span className="hidden sm:inline">WhatsApp Report</span>
+                    <span className="sm:hidden">WhatsApp</span>
+                  </button>
+
                   <button
                     id="btn-download-pdf-report-top"
                     onClick={() => handleDownloadPdf()}
@@ -836,6 +880,24 @@ export const PassportAuditScanner: React.FC<PassportAuditScannerProps> = ({
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        id="btn-whatsapp-audit-banner"
+                        onClick={() => {
+                          const payload = getWhatsAppPayloadFromAuditResult(
+                            auditResult,
+                            undefined,
+                            userProfile?.agencyName || userProfile?.displayName
+                          );
+                          setWhatsAppPayload(payload);
+                          setShowWhatsAppModal(true);
+                        }}
+                        className="bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-slate-950 font-bold px-3.5 py-2.5 rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-md shadow-emerald-500/20 transition-all whitespace-nowrap"
+                        title="Send compliance report directly to client WhatsApp"
+                      >
+                        <MessageCircle className="w-4 h-4 fill-slate-950 text-slate-950" />
+                        <span>Send via WhatsApp</span>
+                      </button>
+
                       <button
                         id="btn-download-pdf-report-bottom"
                         onClick={() => handleDownloadPdf()}
@@ -1109,6 +1171,15 @@ export const PassportAuditScanner: React.FC<PassportAuditScannerProps> = ({
           )}
         </div>
       )}
+      {/* WhatsApp Client Audit Report Share Modal */}
+      <WhatsAppShareModal
+        isOpen={showWhatsAppModal}
+        onClose={() => {
+          setShowWhatsAppModal(false);
+          setWhatsAppPayload(null);
+        }}
+        payload={whatsAppPayload}
+      />
     </div>
   );
 };

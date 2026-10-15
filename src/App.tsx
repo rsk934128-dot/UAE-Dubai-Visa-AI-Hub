@@ -37,9 +37,13 @@ import { AgencyCrmDashboard } from './components/AgencyCrmDashboard';
 import { GdrfaIcpTrackingPortal } from './components/GdrfaIcpTrackingPortal';
 import { B2BPartnerOutreachSection } from './components/B2BPartnerOutreachSection';
 import { MobileKeepAliveHeaderButton } from './components/MobileKeepAliveHeaderButton';
+import { MobileDrawerNavigation } from './components/MobileDrawerNavigation';
+import { MobileBottomNavbar } from './components/MobileBottomNavbar';
 import { PWAInstallButton } from './components/PWAInstallButton';
+import { PWABuilderModal } from './components/PWABuilderModal';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { mobileBackgroundService } from './services/mobileBackgroundService';
+import dubaiHeroImage from './assets/images/dubai_skyline_hero_1789926659918.jpg';
 import { SAMPLE_APPLICATIONS } from './data';
 import { VisaApplication, PassportAuditResult, ApplicationAuditEvent } from './types';
 import { syncApplicationToCloud, getCloudApplications } from './lib/firebase';
@@ -58,6 +62,7 @@ function MainAppContent() {
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const [prefillApplication, setPrefillApplication] = useState<Partial<VisaApplication> | null>(null);
   const [showQuickStart, setShowQuickStart] = useState(false);
+  const [showPWABuilderModal, setShowPWABuilderModal] = useState(false);
 
   // Check if new user should see onboarding guide on initial load
   useEffect(() => {
@@ -74,13 +79,19 @@ function MainAppContent() {
     }
   }, []);
 
-  // Check URL query parameters for mobile QR code direct links
+  // Check URL query parameters for mobile QR code direct links & PWABuilder trigger
   useEffect(() => {
     try {
       if (typeof window !== 'undefined' && window.location.search) {
         const params = new URLSearchParams(window.location.search);
         const tab = params.get('tab');
         const appId = params.get('appId');
+        const pwabuilder = params.get('pwabuilder');
+
+        if (pwabuilder === '1' || pwabuilder === 'true' || tab === 'pwabuilder') {
+          setShowPWABuilderModal(true);
+        }
+
         if (tab === 'agency-crm' || tab === 'tracking-portal' || tab === 'golden-visa' || tab === 'passport-scanner' || tab === 'b2b-outreach') {
           setActiveTab(tab as ActiveTab);
         } else if (appId) {
@@ -464,11 +475,11 @@ function MainAppContent() {
               id="btn-toggle-language"
               onClick={toggleLanguage}
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer shadow-xs bg-slate-900/90 hover:bg-slate-800 border-slate-700/80 text-amber-300 hover:text-amber-200 hover:border-amber-500/50"
-              title={language === 'en' ? 'التحويل إلى اللغة العربية' : 'Switch to English interface'}
+              title="Switch language: English / বাংলা / العربية"
             >
               <Globe className="w-3.5 h-3.5 text-amber-400" />
               <span className="text-xs font-semibold">
-                {language === 'en' ? '🇦🇪 العربية' : '🇬🇧 English'}
+                {language === 'en' ? '🇬🇧 English' : language === 'bn' ? '🇧🇩 বাংলা' : '🇦🇪 العربية'}
               </span>
             </button>
 
@@ -561,6 +572,20 @@ function MainAppContent() {
             {/* PWA In-App Install Prompt */}
             <PWAInstallButton language={language} />
 
+            {/* PWABuilder Store Package & 100% Score Hub */}
+            <button
+              id="btn-open-pwabuilder"
+              onClick={() => setShowPWABuilderModal(true)}
+              className="text-xs font-semibold px-2 sm:px-2.5 py-1.5 rounded-xl text-emerald-300 hover:text-emerald-200 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+              title="PWABuilder 100% Score & Store Packaging Hub (Google Play, iOS & Windows)"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="font-bold">PWABuilder</span>
+              <span className="hidden lg:inline-flex text-[10px] font-black px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
+                100%
+              </span>
+            </button>
+
             {/* Quick Start Onboarding Guide button */}
             <button
               id="btn-open-quick-start"
@@ -572,34 +597,21 @@ function MainAppContent() {
               <span className="hidden sm:inline">{language === 'ar' ? 'دليل البدء' : 'Quick Start'}</span>
             </button>
 
-            {/* Connect Gmail for alerts */}
-            <button
-              id="btn-connect-gmail"
-              onClick={handleConnectGmail}
-              className={`hidden md:flex text-xs font-semibold px-3 py-1.5 rounded-xl items-center gap-1.5 transition-all cursor-pointer ${
-                googleAccessToken 
-                  ? 'bg-emerald-950 text-emerald-300 border border-emerald-800' 
-                  : 'bg-sky-500 hover:bg-sky-400 text-slate-950 shadow-md'
-              }`}
-            >
-              {googleAccessToken ? (
-                <>
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                  {language === 'ar' ? 'تنبيهات البريد مفعلة' : 'Gmail Alerts Active'}
-                </>
-              ) : (
-                <>
-                  <Mail className="w-3.5 h-3.5" />
-                  {language === 'ar' ? 'تنبيهات البريد' : 'Gmail Alerts'}
-                </>
-              )}
-            </button>
+            {/* Mobile Drawer Trigger (Hamburger Menu for Mobile Screens) */}
+            <MobileDrawerNavigation
+              activeTab={activeTab}
+              onSelectTab={(tab) => setActiveTab(tab)}
+              onOpenQuickStart={() => setShowQuickStart(true)}
+              onOpenPWABuilder={() => setShowPWABuilderModal(true)}
+              onConnectGmail={handleConnectGmail}
+              isGmailConnected={Boolean(googleAccessToken)}
+            />
           </div>
         </div>
       </header>
 
-      {/* Secondary Category Navigation Tabs */}
-      <div className="border-b border-slate-800 bg-slate-900/60 sticky top-16 z-30 backdrop-blur-md">
+      {/* Secondary Category Navigation Tabs (Desktop & Tablet view) */}
+      <div className="hidden md:block border-b border-slate-800 bg-slate-900/60 sticky top-16 z-30 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <nav className="flex space-x-1 sm:space-x-3 rtl:space-x-reverse overflow-x-auto py-2.5 no-scrollbar">
             <button
@@ -717,7 +729,58 @@ function MainAppContent() {
       )}
 
       {/* Main Body Content View */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-24 md:pb-6 space-y-6">
+        {/* Dubai Skyline Panoramic Brand Showcase Banner */}
+        <div className="relative rounded-2xl overflow-hidden border border-amber-500/20 shadow-xl bg-slate-950">
+          <div className="absolute inset-0 z-0">
+            <img 
+              src={dubaiHeroImage} 
+              alt="Dubai Skyline at Twilight" 
+              referrerPolicy="no-referrer"
+              className="w-full h-full object-cover object-center opacity-35 scale-105 transition-transform duration-700 hover:scale-100" 
+            />
+            <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-950/85 to-slate-950/50" />
+            <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent" />
+          </div>
+
+          <div className="relative z-10 p-5 sm:p-7 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+            <div className="space-y-2 max-w-2xl">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                  <Sparkles className="w-3 h-3 text-amber-400" />
+                  UAE Government Smart Gateway
+                </span>
+                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-medium bg-slate-900/80 text-sky-300 border border-sky-500/30">
+                  <ShieldCheck className="w-3 h-3 text-sky-400" />
+                  GDRFA Dubai &amp; ICP Federal Accredited
+                </span>
+              </div>
+              <h1 className="text-xl sm:text-2xl lg:text-3xl font-black text-white tracking-tight">
+                UAE &amp; Dubai Visa AI Hub <span className="text-amber-400 font-serif italic text-lg sm:text-xl">Pre-Submission Desk</span>
+              </h1>
+              <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                Automated ICAO Doc 9303 biometric passport inspection, strict 6-month validity enforcement, pure white background photo compliance, and instant 10-year Golden Visa qualification calculator.
+              </p>
+            </div>
+
+            {/* Quick Metrics Cards */}
+            <div className="grid grid-cols-3 gap-2.5 sm:gap-3 w-full md:w-auto shrink-0">
+              <div className="bg-slate-900/80 backdrop-blur-md border border-slate-800/80 rounded-xl p-3 text-center">
+                <div className="text-amber-400 font-mono font-bold text-base sm:text-lg">180+ Days</div>
+                <div className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">Passport Rule</div>
+              </div>
+              <div className="bg-slate-900/80 backdrop-blur-md border border-slate-800/80 rounded-xl p-3 text-center">
+                <div className="text-emerald-400 font-mono font-bold text-base sm:text-lg">80% Face</div>
+                <div className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">Photo Spec</div>
+              </div>
+              <div className="bg-slate-900/80 backdrop-blur-md border border-slate-800/80 rounded-xl p-3 text-center">
+                <div className="text-sky-400 font-mono font-bold text-base sm:text-lg">10-Year</div>
+                <div className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">Golden Visa</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {activeTab === 'passport-scanner' && (
           <PassportAuditScanner
             onAuditCompleted={(result) => {
@@ -776,6 +839,18 @@ function MainAppContent() {
 
       {/* Offline Toast Indicator */}
       <OfflineIndicator />
+
+      {/* PWABuilder Store Package & Audit Modal */}
+      <PWABuilderModal
+        isOpen={showPWABuilderModal}
+        onClose={() => setShowPWABuilderModal(false)}
+      />
+
+      {/* Mobile Bottom Quick-Action Dock / Navbar */}
+      <MobileBottomNavbar
+        activeTab={activeTab}
+        onSelectTab={(tab) => setActiveTab(tab)}
+      />
 
       {/* Footer */}
       <footer className="border-t border-slate-900 bg-slate-950/80 py-4 text-center text-xs text-slate-500">

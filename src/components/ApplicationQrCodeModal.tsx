@@ -17,11 +17,14 @@ import {
   Globe2,
   Mail,
   MessageCircle,
-  Clock
+  Clock,
+  FileDown,
+  RefreshCw
 } from 'lucide-react';
 import { VisaApplication } from '../types';
 import { formatDate } from '../lib/utils';
 import { useLanguage } from '../context/LanguageContext';
+import { generateApplicationAuditTrailPdf } from '../lib/auditTrailPdfGenerator';
 
 interface ApplicationQrCodeModalProps {
   application: VisaApplication | null;
@@ -94,6 +97,25 @@ export const ApplicationQrCodeModal: React.FC<ApplicationQrCodeModalProps> = ({
       setTimeout(() => setCopied(false), 2000);
     } catch (e) {
       console.warn('Copy failed:', e);
+    }
+  };
+
+  const [generatingPdf, setGeneratingPdf] = useState(false);
+
+  const handleDownloadAuditPdf = async () => {
+    if (!application) return;
+    try {
+      setGeneratingPdf(true);
+      await generateApplicationAuditTrailPdf({
+        application,
+        agencyName: 'UAE & Dubai Visa AI Hub',
+        consultantName: application.assignedAgent || 'Immigration Processing Officer'
+      });
+    } catch (err) {
+      console.error('Failed to generate audit PDF from QR modal:', err);
+      alert('Failed to generate PDF audit trail. Please try again.');
+    } finally {
+      setGeneratingPdf(false);
     }
   };
 
@@ -319,45 +341,61 @@ export const ApplicationQrCodeModal: React.FC<ApplicationQrCodeModalProps> = ({
           </div>
 
           {/* Action Buttons Bar */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-1">
             <button
               id="btn-download-qr-png"
               type="button"
               onClick={handleDownloadPng}
-              className="px-3 py-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 transition-colors cursor-pointer flex items-center justify-center gap-1.5 shadow-sm"
+              className="px-2.5 py-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 transition-colors cursor-pointer flex items-center justify-center gap-1 shadow-sm"
             >
               <Download className="w-3.5 h-3.5" />
-              <span>Download PNG</span>
+              <span>PNG</span>
             </button>
 
             <button
               id="btn-copy-qr-link"
               type="button"
               onClick={handleCopyLink}
-              className="px-3 py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+              className="px-2.5 py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors cursor-pointer flex items-center justify-center gap-1"
             >
               {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-amber-400" />}
-              <span>{copied ? 'Copied!' : 'Copy Link'}</span>
+              <span>{copied ? 'Copied' : 'Link'}</span>
             </button>
 
             <button
               id="btn-share-whatsapp-qr"
               type="button"
               onClick={handleShareWhatsApp}
-              className="px-3 py-2 rounded-xl text-xs font-semibold bg-emerald-950 hover:bg-emerald-900 text-emerald-300 border border-emerald-800 transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+              className="px-2.5 py-2 rounded-xl text-xs font-semibold bg-emerald-950 hover:bg-emerald-900 text-emerald-300 border border-emerald-800 transition-colors cursor-pointer flex items-center justify-center gap-1"
             >
               <MessageCircle className="w-3.5 h-3.5 text-emerald-400" />
               <span>WhatsApp</span>
             </button>
 
             <button
+              id="btn-export-pdf-audit-qr"
+              type="button"
+              onClick={handleDownloadAuditPdf}
+              disabled={generatingPdf}
+              className="px-2.5 py-2 rounded-xl text-xs font-semibold bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 transition-colors cursor-pointer flex items-center justify-center gap-1 disabled:opacity-50"
+              title="Download official PDF dossier report containing passport data, status logs & audit history"
+            >
+              {generatingPdf ? (
+                <RefreshCw className="w-3.5 h-3.5 animate-spin text-amber-400" />
+              ) : (
+                <FileDown className="w-3.5 h-3.5 text-amber-400" />
+              )}
+              <span>{generatingPdf ? 'Building...' : 'Dossier PDF'}</span>
+            </button>
+
+            <button
               id="btn-print-qr-label"
               type="button"
               onClick={handlePrintLabel}
-              className="px-3 py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+              className="px-2.5 py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors cursor-pointer flex items-center justify-center gap-1"
             >
               <Printer className="w-3.5 h-3.5 text-sky-400" />
-              <span>Print Label</span>
+              <span>Print</span>
             </button>
           </div>
 

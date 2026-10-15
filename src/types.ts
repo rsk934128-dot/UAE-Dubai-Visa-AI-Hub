@@ -134,6 +134,8 @@ export type DocumentAuditType =
   | 'Salary Certificate / Bank Statement' 
   | 'Emirates ID / National ID' 
   | 'Trade License / Work Contract' 
+  | 'Physical Document Archive'
+  | 'Physical Intake Dossier'
   | 'Other Document';
 
 export type DocumentAuditStatus = 'Passed' | 'Flagged' | 'Under Review' | 'Superseded' | 'Approved';
@@ -161,6 +163,10 @@ export interface DocumentAuditHistoryItem {
     previewUrl?: string;
     fileSize?: string;
     checksumSha256?: string;
+    physicalStorageLocation?: string;
+    physicalBarcode?: string;
+    physicalCondition?: string;
+    receivedByOfficer?: string;
   };
   notes?: string;
   passportAudit?: PassportAuditResult;
@@ -171,6 +177,7 @@ export interface DocumentAuditHistoryItem {
 export type AuditEventType = 
   | 'status_change' 
   | 'email_alert' 
+  | 'whatsapp_alert'
   | 'document_update' 
   | 'application_created' 
   | 'note_added';
@@ -190,10 +197,13 @@ export interface ApplicationAuditEvent {
     newStatus?: string;
     statusColor?: string;
     recipientEmail?: string;
+    recipientPhone?: string;
     subject?: string;
     emailBodyPreview?: string;
+    whatsappTemplate?: string;
+    whatsappMessagePreview?: string;
     templateUsed?: string;
-    deliveryStatus?: 'Delivered' | 'Sent via Gmail' | 'Queued' | 'Failed';
+    deliveryStatus?: 'Delivered' | 'Sent via Gmail' | 'Sent via WhatsApp' | 'Queued' | 'Failed';
     documentType?: string;
     fileName?: string;
     version?: string;
@@ -218,6 +228,7 @@ export interface VisaApplication {
   status: 'Draft' | 'Audited - Passed' | 'Audited - Flagged' | 'Submitted to GDRFA/ICP' | 'In Process' | 'Approved' | 'Rejected';
   urgency: 'Standard' | 'Express 24h' | 'Emergency 6h';
   assignedAgent: string;
+  avatarUrl?: string;
   passportAudit?: PassportAuditResult;
   photoAudit?: PhotoAuditResult;
   documentHistory?: DocumentAuditHistoryItem[];
